@@ -9,8 +9,7 @@
 
 import router from '@adonisjs/core/services/router'
 
-router.get('/', async () => {
-  return {
-    hello: 'world',
-  }
-})
+router
+  .resource('users', () => import('#controllers/users_controller'))
+  .apiOnly()
+  .only(['store'])
