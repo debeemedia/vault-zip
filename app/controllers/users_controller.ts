@@ -30,7 +30,8 @@ export default class UsersController {
       await User.create({ email, licence_key: licenceKey })
 
       return response.created({
-        message: `Registration successful. Your licence key is ${licenceKey}. You will need this to access files.`,
+        message: 'Registration successful.',
+        licenceKey,
       })
     } catch (error) {
       if (error instanceof ValidationException) {

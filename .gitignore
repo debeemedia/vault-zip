@@ -24,3 +24,7 @@ yarn-error.log
 
 # Platform specific
 .DS_Store
+
+# Configs
+.vault-config.json
+.vault-config.test.json

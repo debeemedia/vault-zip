@@ -4,6 +4,7 @@ import ace from '@adonisjs/core/services/ace'
 import { cuid } from '@adonisjs/core/helpers'
 import Register from '../../commands/register.js'
 import User from '#models/user'
+import app from '@adonisjs/core/services/app'
 
 test.group('Register', (group) => {
   group.each.setup(async () => {
@@ -49,8 +50,10 @@ test.group('Register', (group) => {
       assert.isNotEmpty(user!.licence_key)
 
       command.assertLog(
-        `[ blue(info) ] Registration successful. Your licence key is ${user!.licence_key}. You will need this to access files.`
+        `[ blue(info) ] Licence key saved locally to ${app.makePath('.vault-config.test.json')}`
       )
+
+      command.assertLog(`[ blue(info) ] Registration successful.`)
 
       // Assert that the licence key returned (decrypted) is different from what is stored (encrypted)
       const rawUser = await db.from('users').where({ email }).first()

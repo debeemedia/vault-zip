@@ -1,3 +1,4 @@
+import ConfigService from '#services/config_service'
 import { BaseCommand, flags } from '@adonisjs/core/ace'
 import type { CommandOptions } from '@adonisjs/core/types/ace'
 
@@ -23,16 +24,25 @@ export default class Register extends BaseCommand {
       body: JSON.stringify({ email: this.email }),
     })
 
-    const data = (await response.json()) as { message?: string; error?: string; errors?: string[] }
-
-    const stringifiedData = JSON.stringify(data)
+    const data = (await response.json()) as {
+      message?: string
+      licenceKey?: string
+      error?: string
+      errors?: string[]
+    }
 
     if (!response.ok) {
-      this.logger.error(data.error ?? data.errors?.join(', ') ?? stringifiedData)
+      this.logger.error(data.error ?? data.errors?.join(', ') ?? 'Unknown error')
 
       return (this.exitCode = 1)
     }
 
-    this.logger.info(data.message ?? stringifiedData)
+    if (data.licenceKey) {
+      const filePath = await ConfigService.saveLicenceKey(data.licenceKey)
+
+      this.logger.info(`Licence key saved locally to ${filePath}`)
+    }
+
+    this.logger.info(data.message || 'Registration successful.')
   }
 }
