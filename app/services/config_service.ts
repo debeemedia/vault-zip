@@ -1,5 +1,6 @@
 import app from '@adonisjs/core/services/app'
-import { readFile, writeFile } from 'fs/promises'
+import { chmod, readFile, writeFile } from 'fs/promises'
+import { basename } from 'path'
 
 export default class ConfigService {
   static get #path() {
@@ -10,7 +11,14 @@ export default class ConfigService {
     const filePath = this.#path
     await writeFile(filePath, JSON.stringify({ licenceKey }, null, 2))
 
-    return filePath
+    try {
+      // Ensure the file is readable and writable by both the Docker user and Host user to avoid permission collisions
+      await chmod(filePath, 0o666)
+    } catch (_) {
+      // Catch any error in case of filesystems that don't support Linux chmod
+    }
+
+    return `./${basename(filePath)}`
   }
 
   public static async getLicenceKey(): Promise<string | null> {

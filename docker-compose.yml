@@ -1,6 +1,8 @@
 services:
   db:
     image: postgres:15
+    volumes:
+      - pg_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=db_password
@@ -19,6 +21,9 @@ services:
       - '3333:3333'
     depends_on:
       - db
+    volumes:
+      - .:/app
+      - /app/node_modules
     environment:
       - TZ=UTC
       - PORT=3333
@@ -38,6 +43,9 @@ services:
     profiles: ['test']
     depends_on:
       - db_test
+    volumes:
+      - .:/app
+      - /app/node_modules
     environment:
       - TZ=UTC
       - HOST=0.0.0.0
@@ -50,3 +58,6 @@ services:
       - DB_PASSWORD=db_password
       - DB_DATABASE=vault_zip_test
     command: ['node', 'ace', 'test']
+
+volumes:
+  pg_data:
