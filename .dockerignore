@@ -2,5 +2,4 @@ node_modules
 build
 .env
 .env.test
-.vault-config.json
-.vault-config.test.json
+vault_data

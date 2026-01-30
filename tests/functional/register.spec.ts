@@ -5,7 +5,7 @@ import { cuid } from '@adonisjs/core/helpers'
 import Register from '../../commands/register.js'
 import User from '#models/user'
 import app from '@adonisjs/core/services/app'
-import { basename } from 'path'
+import { relative } from 'path'
 
 test.group('Register', (group) => {
   group.each.setup(async () => {
@@ -51,7 +51,7 @@ test.group('Register', (group) => {
       assert.isNotEmpty(user!.licence_key)
 
       command.assertLog(
-        `[ blue(info) ] Licence key saved locally to ./${basename(app.makePath('.vault-config.test.json'))}`
+        `[ blue(info) ] Licence key saved locally to ./${relative(app.makePath(), 'vault_data/.config.test.json')}`
       )
 
       command.assertLog(`[ blue(info) ] Registration successful.`)

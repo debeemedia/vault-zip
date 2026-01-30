@@ -1,14 +1,16 @@
 import app from '@adonisjs/core/services/app'
-import { chmod, readFile, writeFile } from 'fs/promises'
-import { basename } from 'path'
+import { chmod, readFile, writeFile, mkdir} from 'fs/promises'
+import { relative, dirname } from 'path'
 
 export default class ConfigService {
   static get #path() {
-    return app.makePath(app.inTest ? '.vault-config.test.json' : '.vault-config.json')
+    return app.makePath('vault_data', app.inTest ? '.config.test.json' : '.config.json')
   }
 
   public static async saveLicenceKey(licenceKey: string): Promise<string> {
     const filePath = this.#path
+
+    await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, JSON.stringify({ licenceKey }, null, 2))
 
     try {
@@ -18,7 +20,7 @@ export default class ConfigService {
       // Catch any error in case of filesystems that don't support Linux chmod
     }
 
-    return `./${basename(filePath)}`
+    return `./${relative(app.makePath(), filePath)}`
   }
 
   public static async getLicenceKey(): Promise<string | null> {
