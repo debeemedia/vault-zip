@@ -15,14 +15,40 @@ services:
       - POSTGRES_PASSWORD=db_password
       - POSTGRES_DB=vault_zip_test
 
+  minio:
+    image: minio/minio:latest
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      - MINIO_ROOT_USER=user
+      - MINIO_ROOT_PASSWORD=password
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ':9001'
+
+  minio_init:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      sh -c "
+      until (/usr/bin/mc alias set vault-zip-storage http://minio:9000 user password)
+      do echo 'Waiting for MinIO...' && sleep 1; done;
+      /usr/bin/mc mb vault-zip-storage/vault-zip || true;
+      exit 0;
+      "
+
   app:
     build: .
     ports:
       - '3333:3333'
     depends_on:
       - db
+      - minio
     volumes:
       - ./vault_data:/app/vault_data
+      - ./uploads_to_process:/app/uploads_to_process:ro
     environment:
       - TZ=UTC
       - PORT=3333
@@ -35,6 +61,12 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=db_password
       - DB_DATABASE=vault_zip
+      - DRIVE_DISK=s3
+      - AWS_ACCESS_KEY_ID=user
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - S3_BUCKET=vault-zip
+      - S3_ENDPOINT=http://minio:9000
     command: sh -c "node ace migration:run --force && node build/bin/server.js"
 
   tester:
@@ -59,3 +91,4 @@ services:
 
 volumes:
   pg_data:
+  minio_data:

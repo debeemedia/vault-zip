@@ -41,7 +41,7 @@ const bodyParserConfig = defineConfig({
      */
     autoProcess: true,
     convertEmptyStringsToNull: true,
-    processManually: [],
+    processManually: ['/file_uploads/:file_upload_id'],
 
     /**
      * Maximum limit of data to parse including all files
