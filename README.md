@@ -3,13 +3,15 @@
 VaultZip is a high-performance DRM (Digital Rights Management) infrastructure designed for secure file storage and licensed distribution. It utilizes Envelope Encryption (AES-256-GCM) to ensure that sensitive digital assets (PDFs, ZIPs, etc.) are never stored in a raw state, providing tamper-proof file retrieval via unique authentication tags.
 
 Key Security Features:
+
 - On-the-fly Streaming: Files are encrypted as they stream; raw data never touches the server disk.
 
 - Layered Security: Every file has a unique Data Key, which is itself encrypted by a Master Key. Even a database leak won't expose your files without the Master Key.
 
-- Handshake Architecture: Utilizes a custom CLI for a secure two-step upload process.
+- Handshake Architecture: Utilizes a custom CLI for a secure two-step upload process. The backend validates file metadata (like size limits, extensions etc.) during the handshake phase to mitigate "blind upload" attacks, ensuring only compliant streams reach the encryption pipeline.
 
 ## 🔐 The Multi-Level Encryption Strategy
+
 VaultZip uses a tiered security approach to ensure data is protected at rest and during delivery.
 
 Level 1: Storage Encryption (The Seller's Vault)
@@ -33,10 +35,12 @@ This project is fully containerized. You only need Docker to get started.
 ```bash
 docker compose up --build -d
 ```
-*Starts the AdonisJS app, PostgreSQL, and MinIO (S3 storage).*
+
+_Starts the AdonisJS app, PostgreSQL, and MinIO (S3 storage)._
 
 2. Register Your Identity
-This command creates your user profile and generates a License Key.
+
+   This command creates your user profile and generates a License Key.
 
 - The "Dual Role" Demo: In this project, you are acting as both the Seller (storing the asset) and the Buyer (using a license to unlock it).
 
@@ -56,7 +60,7 @@ docker compose exec db psql -U postgres -d vault_zip -c "\x" -c "SELECT email, l
 
 3. Encrypted Upload
 
-Files are encrypted via a streaming pipeline and sent directly to MinIO.  Ensure your file is located in the `./uploads_to_process` folder.
+Files are encrypted via a streaming pipeline and sent directly to MinIO. Ensure your file is located in the `./uploads_to_process` folder.
 
 ```bash
 docker compose exec app node ace vault-zip:upload --email=your_email --title="My very important file" ./uploads_to_process/your_file.pdf
@@ -75,6 +79,7 @@ docker compose exec db psql -U postgres -d vault_zip -c "\x" -c "SELECT title, s
 ```
 
 ## Functional Tests
+
 Run the full test suite:
 
 ```bash
