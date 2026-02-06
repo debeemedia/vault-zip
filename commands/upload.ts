@@ -62,7 +62,12 @@ export default class Upload extends BaseCommand {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email: this.email, title: this.title, file_name: fileName }),
+      body: JSON.stringify({
+        email: this.email,
+        title: this.title,
+        file_name: fileName,
+        file_size: fileBlob.size,
+      }),
     })
 
     const preFlightData = (await preFlightResponse.json()) as {

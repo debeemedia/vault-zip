@@ -13,6 +13,7 @@ import vine, { SimpleMessagesProvider } from '@vinejs/vine'
 const stringRules = [rules.trim(), rules.escape()]
 
 const allowedExtensions = ['zip', 'doc', 'docx', 'pdf']
+const maxFileSizeMB = 500 // in "mb"
 
 export default class FileUploadsController {
   public async store({ request, response }: HttpContext) {
@@ -29,12 +30,18 @@ export default class FileUploadsController {
             ...stringRules,
             rules.regex(new RegExp(`\\.(${allowedExtensions.join('|')})$`, 'i')),
           ]),
+          /**
+           * @todo For later: add the `file_size` column to the table to track the total storage used by the user/seller (for plan limits)
+           */
+          file_size: schema.number([rules.range(0, maxFileSizeMB * 1024 * 1024)]),
         }),
         messages: {
           'title.required': 'Title is required.',
           'email.required': 'Email is required.',
           'file_name.required': 'Original file name is required.',
           'file_name.regex': `Invalid file type. Only ${allowedExtensions.join(', ')} are allowed.`,
+          'file_size.required': 'File size is required',
+          'file_size.range': 'File size must not exceed 500mb.',
         },
       })
 
@@ -134,7 +141,7 @@ export default class FileUploadsController {
 
       request.multipart.onFile(
         'file',
-        { size: '500mb', extnames: allowedExtensions },
+        { size: `${maxFileSizeMB}mb`, extnames: allowedExtensions },
         async (part, reporter) => {
           /**
            * IMPORTANT: Listen for errors on part to prevent
