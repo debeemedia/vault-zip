@@ -23,6 +23,6 @@ export default class User extends BaseModel {
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
 
-  @hasMany(() => FileUpload)
+  @hasMany(() => FileUpload, { foreignKey: 'user_id' })
   declare fileUploads: HasMany<typeof FileUpload>
 }
