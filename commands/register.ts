@@ -12,10 +12,15 @@ export default class Register extends BaseCommand {
     staysAlive: false,
   }
 
-  @flags.string({ required: false })
-  declare email?: string
+  @flags.string()
+  declare email: string
 
   async run() {
+    if (!this.email?.trim()) {
+      this.logger.error('Provide any email.')
+      return (this.exitCode = 1)
+    }
+
     const response = await fetch(`http://${process.env.HOST}:${process.env.PORT}/users`, {
       method: 'POST',
       headers: {
