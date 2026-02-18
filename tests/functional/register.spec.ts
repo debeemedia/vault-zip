@@ -39,7 +39,7 @@ test.group('Register', (group) => {
         return command.assertLog(
           condition === 'email_already_exists'
             ? `[ red(error) ] Email already exists.`
-            : `[ red(error) ] Email is required.`
+            : `[ red(error) ] Provide any email.`
         )
       }
 

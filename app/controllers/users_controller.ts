@@ -9,11 +9,7 @@ export default class UsersController {
     try {
       const { email } = await request.validate({
         schema: schema.create({
-          email: schema.string.optional([
-            rules.trim(),
-            rules.escape(),
-            rules.required() /** Apply required rule after trimming */,
-          ]),
+          email: schema.string([rules.trim(), rules.escape()]),
         }),
         messages: {
           'email.required': 'Email is required.',
