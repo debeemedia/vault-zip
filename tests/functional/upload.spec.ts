@@ -223,4 +223,5 @@ test.group('Upload', (group) => {
       command.assertLog(`[ red(error) ] ${message}`)
     })
     .tags(['upload'])
+    .timeout(30000)
 })

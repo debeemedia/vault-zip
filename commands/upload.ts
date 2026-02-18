@@ -45,15 +45,12 @@ export default class Upload extends BaseCommand {
       return (this.exitCode = 1)
     }
 
-    // const readStream = fs.createReadStream(this.filePath)
-    const fileBlob = await fs.openAsBlob(this.filePath)
+    const stats = fs.statSync(this.filePath)
 
     const fileName = path.basename(this.filePath)
 
     const formData = new FormData()
     formData.append('title', this.title)
-
-    formData.append('file', fileBlob, fileName)
 
     const baseUrl = `http://${process.env.HOST}:${process.env.PORT}/file_uploads`
 
@@ -66,7 +63,7 @@ export default class Upload extends BaseCommand {
         email: this.email,
         title: this.title,
         file_name: fileName,
-        file_size: fileBlob.size,
+        file_size: stats.size,
       }),
     })
 
@@ -87,9 +84,16 @@ export default class Upload extends BaseCommand {
       return
     }
 
+    // const readStream = fs.createReadStream(this.filePath)
+    const fileBlob = await fs.openAsBlob(this.filePath)
+
+    const uploadData = new FormData()
+
+    uploadData.append('file', fileBlob, fileName)
+
     const response = await fetch(`${baseUrl}/${preFlightData.fileUploadId}`, {
       method: 'POST',
-      body: formData,
+      body: uploadData,
       headers: {
         email: this.email,
       },
