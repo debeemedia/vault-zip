@@ -14,34 +14,34 @@ export default class Upload extends BaseCommand {
 
   @args.string({
     argumentName: 'file-path',
-    description: 'Path to the zip file',
+    description: 'Path to the zip file.',
   })
-  declare filePath: string
+  declare filePath?: string
 
   @flags.string()
-  declare title: string
+  declare title?: string
 
   @flags.string()
-  declare email: string
+  declare email?: string
 
   async run() {
-    if (!this.email) {
+    if (!this.email?.trim()) {
       this.logger.error('Provide your email.')
       return (this.exitCode = 1)
     }
 
-    if (!this.title) {
-      this.logger.error('Provide a title for the file')
+    if (!this.title?.trim()) {
+      this.logger.error('Provide a title for the file.')
       return (this.exitCode = 1)
     }
 
-    if (!this.filePath) {
-      this.logger.error('Provide the path to the file')
+    if (!this.filePath?.trim()) {
+      this.logger.error('Provide the path to the file.')
       return (this.exitCode = 1)
     }
 
     if (!fs.existsSync(this.filePath)) {
-      this.logger.error(`File not found at ${this.filePath}`)
+      this.logger.error(`File not found at ${this.filePath}.`)
       return (this.exitCode = 1)
     }
 

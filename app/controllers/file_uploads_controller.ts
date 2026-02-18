@@ -9,11 +9,12 @@ import User from '#models/user'
 import encryption from '@adonisjs/core/services/encryption'
 import crypto from 'node:crypto'
 import vine, { SimpleMessagesProvider } from '@vinejs/vine'
+import app from '@adonisjs/core/services/app'
+import { allowedExtensions, allowedPattern } from '../../helpers/file_upload_helper.js'
 
 const stringRules = [rules.trim(), rules.escape()]
 
-const allowedExtensions = ['zip', 'doc', 'docx', 'pdf']
-const maxFileSizeMB = 500 // in "mb"
+const maxFileSizeMB = app.inTest ? 50 : 500 // in "mb"
 
 export default class FileUploadsController {
   public async store({ request, response }: HttpContext) {
@@ -26,10 +27,7 @@ export default class FileUploadsController {
         schema: schema.create({
           title: schema.string([...stringRules, rules.maxLength(100)]),
           email: schema.string(stringRules),
-          file_name: schema.string([
-            ...stringRules,
-            rules.regex(new RegExp(`\\.(${allowedExtensions.join('|')})$`, 'i')),
-          ]),
+          file_name: schema.string([...stringRules, rules.regex(allowedPattern)]),
           /**
            * @todo For later: add the `file_size` column to the table to track the total storage used by the user/seller (for plan limits)
            */
@@ -37,6 +35,7 @@ export default class FileUploadsController {
         }),
         messages: {
           'title.required': 'Title is required.',
+          'title.maxLength': 'Title must not exceed 100 characters.',
           'email.required': 'Email is required.',
           'file_name.required': 'Original file name is required.',
           'file_name.regex': `Invalid file type. Only ${allowedExtensions.join(', ')} are allowed.`,
@@ -222,13 +221,10 @@ export default class FileUploadsController {
         const messages = {
           extname: `${file.clientName} is not a zip`,
           size: `${file.clientName} is too large. `,
-          fatal: `The remote storage rejected the file.`,
+          fatal: `The remote storage rejected the file: ${error.message}`,
         }
 
-        return {
-          type: error.type,
-          message: messages[error.type] || error.message,
-        }
+        return messages[error.type] || error.message
       })
 
       if (!file.isValid) {

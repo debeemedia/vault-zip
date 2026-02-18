@@ -36,6 +36,7 @@ services:
       until (/usr/bin/mc alias set vault-zip-storage http://minio:9000 user password)
       do echo 'Waiting for MinIO...' && sleep 1; done;
       /usr/bin/mc mb vault-zip-storage/vault-zip || true;
+      /usr/bin/mc mb vault-zip-storage/vault-zip-test || true;
       exit 0;
       "
 
@@ -74,8 +75,14 @@ services:
     profiles: ['test']
     depends_on:
       - db_test
+      - minio
+      # Ensure the bucket-creation script finishes successfully before the tests are run:
+      - minio_init
     volumes:
       - ./vault_data:/app/vault_data
+      # # For active local testing in development
+      # - ./:/app
+      # - /app/node_modules
     environment:
       - TZ=UTC
       - HOST=0.0.0.0
@@ -87,6 +94,12 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=db_password
       - DB_DATABASE=vault_zip_test
+      - DRIVE_DISK=s3
+      - AWS_ACCESS_KEY_ID=user
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - S3_BUCKET=vault-zip-test
+      - S3_ENDPOINT=http://minio:9000
     command: ['node', 'ace', 'test']
 
 volumes:
