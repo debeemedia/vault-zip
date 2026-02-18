@@ -5,6 +5,7 @@ tmp
 
 # Secrets
 .env
+.env.test
 .env.local
 .env.production.local
 .env.development.local
@@ -23,3 +24,6 @@ yarn-error.log
 
 # Platform specific
 .DS_Store
+
+# Configs
+vault_data

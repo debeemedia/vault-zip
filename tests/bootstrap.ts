@@ -4,6 +4,10 @@ import app from '@adonisjs/core/services/app'
 import type { Config } from '@japa/runner/types'
 import { pluginAdonisJS } from '@japa/plugin-adonisjs'
 import testUtils from '@adonisjs/core/services/test_utils'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execAsync = promisify(exec)
 
 /**
  * This file is imported by the "bin/test.ts" entrypoint file
@@ -23,8 +27,17 @@ export const plugins: Config['plugins'] = [assert(), apiClient(), pluginAdonisJS
  * The teardown functions are executed after all the tests
  */
 export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
-  setup: [],
-  teardown: [],
+  setup: [
+    async () => {
+      console.log('Running migrations...')
+      await execAsync('node ace migration:run')
+    },
+  ],
+  teardown: [
+    async () => {
+      await execAsync('node ace migration:rollback')
+    },
+  ],
 }
 
 /**
@@ -32,7 +45,16 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
  * Learn more - https://japa.dev/docs/test-suites#lifecycle-hooks
  */
 export const configureSuite: Config['configureSuite'] = (suite) => {
-  if (['browser', 'functional', 'e2e'].includes(suite.name)) {
-    return suite.setup(() => testUtils.httpServer().start())
+  if (['browser', 'functional', 'e2e', 'default'].includes(suite.name)) {
+    return suite.setup(() => {
+      const server = testUtils.httpServer().start()
+      console.log('Http server started in test environment.')
+
+      // Shutdown server
+      return server
+    })
   }
 }
+
+// Specify test files to load
+export const files = ['tests/**/*.spec.ts']
