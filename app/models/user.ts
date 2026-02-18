@@ -1,6 +1,8 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column } from '@adonisjs/lucid/orm'
+import { BaseModel, column, hasMany } from '@adonisjs/lucid/orm'
 import encryption from '@adonisjs/core/services/encryption'
+import type { HasMany } from '@adonisjs/lucid/types/relations'
+import FileUpload from './file_upload.js'
 
 export default class User extends BaseModel {
   static ENCRYPTION_PURPOSE = 'Licensing'
@@ -20,4 +22,7 @@ export default class User extends BaseModel {
 
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
+
+  @hasMany(() => FileUpload, { foreignKey: 'user_id' })
+  declare fileUploads: HasMany<typeof FileUpload>
 }

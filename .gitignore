@@ -27,3 +27,7 @@ yarn-error.log
 
 # Configs
 vault_data
+
+# Files to upload
+/uploads_to_process/*
+!/uploads_to_process/.gitkeep
