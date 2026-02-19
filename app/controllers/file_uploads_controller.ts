@@ -93,6 +93,8 @@ export default class FileUploadsController {
       messagesProvider: new SimpleMessagesProvider({
         'email.required': 'Email is required.',
         'email.exists': 'User does not exist.',
+        'database.required': 'The {{ field }} is required.',
+        'database.exists': 'The {{ field }} does not exist.',
       }),
     })
 
