@@ -63,6 +63,10 @@ export default class Download extends BaseCommand {
       return (this.exitCode = 0)
     }
 
+    if (process?.stdout?.columns < 100) {
+      this.logger.warning('Terminal width is narrow. The table below might look messy.')
+    }
+
     const table = this.ui.table()
 
     table.head(['ID', 'Title', 'Original File Name', ' File Size Approx'])
@@ -73,13 +77,14 @@ export default class Download extends BaseCommand {
 
     table.render()
 
-    const fileUploadId = await this.prompt.ask('Enter the ID of the file', {
-      validate(value) {
-        return !data.data!.map((file) => file.id).includes(value)
-          ? 'Please enter a valid file ID'
-          : true
-      },
-    })
+    const fileUploadId = await this.prompt.choice(
+      'Select the file to download',
+      data.data.map((file) => ({
+        name: file.id,
+        message: file.original_file_name,
+        hint: file.title.length > 25 ? file.title.substring(0, 22) + '...' : file.title,
+      }))
+    )
 
     /* const fileUploadResponse = */ await fetch(
       `http://${process.env.HOST}:${process.env.PORT}/file_uploads/${fileUploadId}`,
