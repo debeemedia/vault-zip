@@ -13,6 +13,7 @@ import app from '@adonisjs/core/services/app'
 import { allowedExtensions, allowedPattern } from '../../helpers/file_upload_helper.js'
 import AdmZip from 'adm-zip'
 import { randomBytes } from 'crypto'
+import fs from 'fs'
 
 const testDir = app.makePath('tmp', 'tests')
 
@@ -101,9 +102,12 @@ test.group('Upload', (group) => {
         'location',
         'encrypted_file_key',
         'original_file_name',
+        'file_size',
       ])
 
       assert.equal(join(testDir, upload.file_data.original_file_name), testFilePath)
+
+      assert.equal(fs.statSync(testFilePath).size, upload.file_data.file_size)
 
       const disk = drive.use('s3')
 
