@@ -9,14 +9,15 @@ import User from '#models/user'
 import encryption from '@adonisjs/core/services/encryption'
 import crypto from 'node:crypto'
 import vine, { SimpleMessagesProvider } from '@vinejs/vine'
-import app from '@adonisjs/core/services/app'
-import { allowedExtensions, allowedPattern } from '../../helpers/file_upload_helper.js'
+import {
+  allowedExtensions,
+  allowedPattern,
+  maxFileSizeMB,
+} from '../../helpers/file_upload_helper.js'
 import drive from '@adonisjs/drive/services/main'
 import { PassThrough } from 'node:stream'
 
 const stringRules = [rules.trim(), rules.escape()]
-
-const maxFileSizeMB = app.inTest ? 50 : 500 // in "mb"
 
 export default class FileUploadsController {
   public async index({ request, response }: HttpContext) {
@@ -175,7 +176,7 @@ export default class FileUploadsController {
         'file_name.required': 'Original file name is required.',
         'file_name.regex': `Invalid file type. Only ${allowedExtensions.join(', ')} are allowed.`,
         'file_size.required': 'File size is required',
-        'file_size.range': 'File size must not exceed 500mb.',
+        'file_size.range': `File size must not exceed ${maxFileSizeMB}mb.`,
       },
     })
 

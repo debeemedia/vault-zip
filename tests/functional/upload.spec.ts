@@ -10,7 +10,11 @@ import drive from '@adonisjs/drive/services/main'
 import { FileUploadStatuses } from '#models/file_upload'
 import { faker } from '@faker-js/faker'
 import app from '@adonisjs/core/services/app'
-import { allowedExtensions, allowedPattern } from '../../helpers/file_upload_helper.js'
+import {
+  allowedExtensions,
+  allowedPattern,
+  maxFileSizeMB,
+} from '../../helpers/file_upload_helper.js'
 import AdmZip from 'adm-zip'
 import { randomBytes } from 'crypto'
 import fs from 'fs'
@@ -159,7 +163,7 @@ test.group('Upload', (group) => {
       zipFile.addFile(
         'file.txt',
         condition === 'file_size_exceeds_max_size'
-          ? randomBytes(1024 * 1024 * 60)
+          ? randomBytes(1024 * 1024 * (maxFileSizeMB + 10))
           : Buffer.alloc(1024, '0')
       )
 
@@ -209,7 +213,7 @@ test.group('Upload', (group) => {
           break
 
         case 'file_size_exceeds_max_size':
-          message = 'File size must not exceed 500mb.'
+          message = `File size must not exceed ${maxFileSizeMB}mb.`
           break
 
         case 'title_not_provided':
@@ -225,6 +229,45 @@ test.group('Upload', (group) => {
       }
 
       command.assertLog(`[ red(error) ] ${message}`)
+    })
+    .tags(['upload'])
+    .timeout(30000)
+
+  test('should upload a large file that is under the max file size limit')
+    .run(async ({ assert }) => {
+      const email = 'test@example.com'
+
+      const user = await User.create({ email, licence_key: cuid() })
+
+      const title = 'My Important File'
+
+      const zipFile = new AdmZip()
+      zipFile.addFile('file.txt', randomBytes(1024 * 1024 * (maxFileSizeMB - 5)))
+
+      await zipFile.writeZipPromise(testFilePath)
+
+      const command = await ace.create(Upload, [
+        testFilePath,
+        `--email=${email}`,
+        `--title=${title}`,
+      ])
+
+      await command.exec()
+
+      command.assertSucceeded()
+
+      command.assertLog('[ blue(info) ] File upload successful.')
+
+      await user.load('fileUploads')
+
+      const upload = user.fileUploads[0].serialize()
+
+      const disk = drive.use('s3')
+
+      assert.isTrue(await disk.exists(upload.file_data.location))
+
+      // Cleanup
+      await disk.delete(upload.file_data.location)
     })
     .tags(['upload'])
     .timeout(30000)
