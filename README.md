@@ -88,6 +88,8 @@ Download your encrypted bundle from the vault. The system re-encrypts the file's
 docker compose exec app node ace vault-zip:download --email=your_email --licence-key=your_license_key
 ```
 
+Upon running the command, you should see a formatted table of your available files. Select the file you want to download.
+
 🔍 How to Verify the Distribution Encryption
 
 **Local Storage Layer (`./vault_downloads`)**
