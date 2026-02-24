@@ -22,9 +22,11 @@ When a file is uploaded, it is encrypted using **AES-256-GCM** with a unique **D
 
 Level 2: Distribution Encryption (The Buyer's License)
 
-When a user requests a download, the system doesn't just decrypt the file; it re-encrypts it on-the-fly using the user's unique License Key.
+When a user downloads a file, the system performs a cryptographic handshake that ties the data to their specific license. Instead of sending a raw file, the system re-wraps the Data Encryption Key (DEK) using the user's unique License Key.
 
-- Status: This ensures that the downloaded file is cryptographically tied to a specific buyer, preventing unauthorized redistribution.
+Process: The file remains encrypted with its original DEK, but that DEK is now protected by the user's License Key rather than the system's Master Key.
+
+Security: This ensures the downloaded `.vault` bundle is cryptographically locked to the buyer. Even if the file is leaked, it cannot be decrypted without the specific License Key used during the download, preventing unauthorized redistribution.
 
 ## 🚀 Quick Start (Docker)
 
@@ -77,6 +79,19 @@ To verify that the cryptographic fingerprints (IV, Auth Tag, and Encrypted Key) 
 ```bash
 docker compose exec db psql -U postgres -d vault_zip -c "\x" -c "SELECT title, status, file_data FROM file_uploads;"
 ```
+
+4. Secure Download (Distribution Encryption)
+
+Download your encrypted bundle from the vault. The system re-encrypts the file's access key with your License Key during transit, creating a unique `.vault` file tied specifically to your credentials.
+
+```bash
+docker compose exec app node ace vault-zip:download --email=your_email --licence-key=your_license_key
+```
+
+🔍 How to Verify the Distribution Encryption
+
+**Local Storage Layer (`./vault_downloads`)**
+Check your project's directory for a `./vault_downloads` directory. You will find a `.vault` file. Even though this file exists on your hard drive, it remains fully encrypted.
 
 ## Functional Tests
 
