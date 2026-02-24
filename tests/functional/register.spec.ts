@@ -54,7 +54,7 @@ test.group('Register', (group) => {
         `[ blue(info) ] Licence key saved locally to ./${relative(app.makePath(), 'vault_data/.config.test.json')}`
       )
 
-      command.assertLog(`[ blue(info) ] Registration successful.`)
+      command.assertLog(`[ green(success) ] Registration successful.`)
 
       // Assert that the licence key returned (decrypted) is different from what is stored (encrypted)
       const rawUser = await db.from('users').where({ email }).first()

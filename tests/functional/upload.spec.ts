@@ -82,7 +82,7 @@ test.group('Upload', (group) => {
 
       command.assertSucceeded()
 
-      command.assertLog('[ blue(info) ] File upload successful.')
+      command.assertLog('[ green(success) ] File upload successful.')
 
       await user.load('fileUploads')
 
@@ -256,7 +256,7 @@ test.group('Upload', (group) => {
 
       command.assertSucceeded()
 
-      command.assertLog('[ blue(info) ] File upload successful.')
+      command.assertLog('[ green(success) ] File upload successful.')
 
       await user.load('fileUploads')
 

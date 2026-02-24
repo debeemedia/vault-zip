@@ -111,6 +111,6 @@ export default class Upload extends BaseCommand {
       return (this.exitCode = 1)
     }
 
-    this.logger.info(data.message || 'File upload successful.')
+    this.logger.success(data.message || 'File upload successful.')
   }
 }

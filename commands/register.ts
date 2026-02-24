@@ -48,6 +48,6 @@ export default class Register extends BaseCommand {
       this.logger.info(`Licence key saved locally to ${filePath}`)
     }
 
-    this.logger.info(data.message || 'Registration successful.')
+    this.logger.success(data.message || 'Registration successful.')
   }
 }
