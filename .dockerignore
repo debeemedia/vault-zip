@@ -4,3 +4,4 @@ build
 .env.test
 vault_data
 uploads_to_process
+vault_downloads

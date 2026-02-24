@@ -127,9 +127,17 @@ export default class FileUploadsController {
     encryptedStream.on('error', (error) => {
       combinedStream.destroy(error)
     })
+
+    let isFinished = false
+    encryptedStream.on('end', () => {
+      isFinished = true
+    })
     // Handle user download cancellation
     request.request.on('close', () => {
-      console.log('Download cancelled')
+      if (!isFinished) {
+        console.log('Download cancelled by user or network error.')
+      }
+
       if (!combinedStream.destroyed) {
         combinedStream.destroy()
       }

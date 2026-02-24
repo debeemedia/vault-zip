@@ -1,5 +1,9 @@
 import { BaseCommand, flags } from '@adonisjs/core/ace'
 import type { CommandOptions } from '@adonisjs/core/types/ace'
+import fs from 'fs'
+import ConfigService from '#services/config_service'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 
 export default class Download extends BaseCommand {
   static commandName = 'vault-zip:download'
@@ -29,6 +33,8 @@ export default class Download extends BaseCommand {
       this.logger.error('Provide your licence key.')
       return (this.exitCode = 1)
     }
+
+    this.logger.info('Getting your files...')
 
     const fileUploadsResponse = await fetch(
       `http://${process.env.HOST}:${process.env.PORT}/file_uploads`,
@@ -86,7 +92,7 @@ export default class Download extends BaseCommand {
       }))
     )
 
-    /* const fileUploadResponse = */ await fetch(
+    const fileUploadResponse = await fetch(
       `http://${process.env.HOST}:${process.env.PORT}/file_uploads/${fileUploadId}`,
       {
         method: 'GET',
@@ -97,8 +103,40 @@ export default class Download extends BaseCommand {
       }
     )
 
-    console.log('client work in progress...')
+    if (!fileUploadResponse.ok || !fileUploadResponse.body) {
+      this.logger.error('Failed to fetch file stream.')
+      return (this.exitCode = 1)
+    }
 
-    // todo: consider progress bar (this.ui.logger) during large file download
+    const fileName =
+      fileUploadResponse.headers.get('content-disposition')?.split('filename=')[1] ||
+      'encrypted_file.vault'
+
+    const outputPath = ConfigService.getDownloadPath(fileName)
+
+    try {
+      const fileStream = fs.createWriteStream(outputPath)
+
+      const readableStream = Readable.fromWeb(fileUploadResponse.body)
+
+      this.logger.info('Downloading encrypted bundle...')
+
+      // Use `pipeline` rahter than `pipe` for graceful stream closing in case of error
+      await pipeline(readableStream, fileStream)
+
+      this.logger.success(`Download complete. Encrypted bundle saved to ${outputPath}`)
+    } catch (error) {
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath)
+      }
+
+      this.logger.error(`Download interrupted: ${error.message}`)
+
+      this.exitCode = 1
+    }
+
+    /**
+     * @todo: Future consideration: progress bar for large file downloads.
+     */
   }
 }
