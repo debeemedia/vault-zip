@@ -17,11 +17,8 @@ export default class Download extends BaseCommand {
   @flags.string()
   declare email?: string
 
-  /**
-   * NB: Input the flag as "licence-key" when typing the commmand.
-   */
-  @flags.string()
-  declare licenceKey?: string
+  @flags.boolean({ description: 'Manually enter a different licence key.' })
+  declare overrideKey?: boolean
 
   async run() {
     if (!this.email?.trim()) {
@@ -29,8 +26,23 @@ export default class Download extends BaseCommand {
       return (this.exitCode = 1)
     }
 
-    if (!this.licenceKey?.trim()) {
-      this.logger.error('Provide your licence key.')
+    let licenceKey: string | null = null
+
+    if (!this.overrideKey) {
+      licenceKey = await ConfigService.getLicenceKey()
+    }
+
+    // If no licence key in config or if --override-key was used, prompt securely
+    if (!licenceKey) {
+      licenceKey = await this.prompt.secure(
+        this.overrideKey
+          ? 'Enter the override licence key'
+          : 'Enter your licence key (not found in config).'
+      )
+    }
+
+    if (!licenceKey?.trim()) {
+      this.logger.error('Licence key is required.')
       return (this.exitCode = 1)
     }
 
@@ -42,7 +54,7 @@ export default class Download extends BaseCommand {
         method: 'GET',
         headers: {
           email: this.email,
-          licence_key: this.licenceKey,
+          licence_key: licenceKey,
         },
       }
     )
@@ -98,7 +110,7 @@ export default class Download extends BaseCommand {
         method: 'GET',
         headers: {
           email: this.email,
-          licence_key: this.licenceKey,
+          licence_key: licenceKey,
         },
       }
     )

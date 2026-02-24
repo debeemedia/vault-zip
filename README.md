@@ -85,10 +85,18 @@ docker compose exec db psql -U postgres -d vault_zip -c "\x" -c "SELECT title, s
 Download your encrypted bundle from the vault. The system re-encrypts the file's access key with your License Key during transit, creating a unique `.vault` file tied specifically to your credentials.
 
 ```bash
-docker compose exec app node ace vault-zip:download --email=your_email --licence-key=your_license_key
+docker compose exec app node ace vault-zip:download --email=your_email
 ```
 
-Upon running the command, you should see a formatted table of your available files. Select the file you want to download.
+**Note on Security:** To prevent your License Key from leaking into shell history or process logs, the command will securely prompt you for the key if it isn't found in your local configuration (`./vault_data/.config.json`).
+
+**Manual Override:** If you have a key saved in your config but want to use a different one (e.g., for testing), use the override flag to trigger a fresh secure prompt:
+
+```bash
+docker compose exec app node ace vault-zip:download --email=your_email --override-key
+```
+
+Upon running the download command, you should see a formatted table of your available files. Select the file you want to download.
 
 🔍 How to Verify the Distribution Encryption
 
