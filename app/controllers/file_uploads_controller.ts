@@ -11,6 +11,8 @@ import crypto from 'node:crypto'
 import vine, { SimpleMessagesProvider } from '@vinejs/vine'
 import app from '@adonisjs/core/services/app'
 import { allowedExtensions, allowedPattern } from '../../helpers/file_upload_helper.js'
+import drive from '@adonisjs/drive/services/main'
+import { PassThrough } from 'node:stream'
 
 const stringRules = [rules.trim(), rules.escape()]
 
@@ -52,14 +54,102 @@ export default class FileUploadsController {
 
     const { user } = validationResult
 
-    /*   const fileUpload =  */ await FileUpload.query()
+    const fileUpload = await FileUpload.query()
       .where({ id: params.id })
       .whereHas('user', (userQuery) => {
         userQuery.select('id').where({ id: user.id })
       })
       .firstOrFail()
 
-    console.log('backend work in progress...')
+    const location = fileUpload.file_data.location
+
+    const encryptedStream = await drive.use('s3').getStream(location)
+
+    const rawFileKey = this.#decryptFileKey(fileUpload)
+
+    const salt = crypto.randomBytes(16)
+
+    const derivedAESLicenceKey = await new Promise<Buffer>((resolve, reject) => {
+      crypto.scrypt(user.licence_key, salt, 32, (error, derivedKey) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(derivedKey)
+        }
+      })
+    })
+
+    const iv = crypto.randomBytes(12)
+
+    const cipher = crypto.createCipheriv('aes-256-gcm', derivedAESLicenceKey, iv)
+
+    const encryptedFileKey = Buffer.concat([cipher.update(rawFileKey), cipher.final()])
+
+    const authTag = cipher.getAuthTag()
+
+    /**
+     * Package everything needed for decrypting the encrypted file key and the encrypted file itself i.e. the salt, ivs and auth tags, as metadata to be bundled along with the encrypted file to the client.
+     */
+
+    const metadata = JSON.stringify({
+      keySalt: salt.toString('base64'),
+      keyIV: iv.toString('base64'),
+      keyAuthTag: authTag.toString('base64'),
+      wrappedKey: encryptedFileKey.toString('base64'),
+      fileIV: fileUpload.file_data.iv,
+      fileAuthTag: fileUpload.file_data.auth_tag,
+    })
+
+    const headerBuffer = Buffer.from(metadata)
+
+    /**
+     * IMPORTANT: We allocate 4 bytes to define the length of the metadata buffer.
+     * The client must read the first 4 bytes of the bundle to be sent as the instruction of where the metadata buffer ends. After the metadata is the encrypted file itself.
+     */
+
+    const lengthPrefix = Buffer.alloc(4)
+
+    lengthPrefix.writeUInt32BE(headerBuffer.length)
+
+    response.header('Content-Type', 'application/octet-stream')
+    response.header(
+      'Content-Disposition',
+      `attachment; filename=${fileUpload.file_data.original_file_name}.vault`
+    )
+
+    const combinedStream = new PassThrough()
+
+    // Handle streaming errors
+    combinedStream.on('error', (error) => {
+      console.error('Stream Error:', error)
+    })
+    encryptedStream.on('error', (error) => {
+      combinedStream.destroy(error)
+    })
+    // Handle user download cancellation
+    request.request.on('close', () => {
+      console.log('Download cancelled')
+      if (!combinedStream.destroyed) {
+        combinedStream.destroy()
+      }
+      if (!encryptedStream.destroyed) {
+        encryptedStream.destroy()
+      }
+    })
+
+    /**
+     * Connect the PassThrough stream to the response before writing any data. This handles "backpressure", allowing data to flow immediately to the client without buffering in the server's memory.
+     */
+    response.stream(combinedStream)
+
+    // Write 4-byte length indicator first
+    combinedStream.write(lengthPrefix)
+
+    // Write the JSON metadata buffer second
+    combinedStream.write(headerBuffer)
+
+    // Pipe the encrypted file data from S3 last. This automatically closes the stream.
+    encryptedStream.pipe(combinedStream)
   }
 
   public async store({ request, response }: HttpContext) {
@@ -116,7 +206,7 @@ export default class FileUploadsController {
       status: FileUploadStatuses.Pending,
       file_data: {
         encrypted_file_key: encryptedFileKey,
-        iv: iv.toString('hex'),
+        iv: iv.toString('base64'),
         original_file_name: originalFileName,
         // File size saved in bytes
         file_size: fileSize,
@@ -160,22 +250,9 @@ export default class FileUploadsController {
       return response.badRequest({ error: 'This file has already been uploaded.' })
     }
 
-    const iv = Buffer.from(fileUpload.file_data.iv, 'hex')
+    const iv = Buffer.from(fileUpload.file_data.iv, 'base64')
 
-    const decryptedBase64FileKey = encryption.decrypt<string>(
-      fileUpload.file_data.encrypted_file_key,
-      FileUploadsController.#ENCRYPTION_PURPOSE
-    )
-
-    if (!decryptedBase64FileKey) {
-      throw new Error('Unable to decrypt file key')
-    }
-
-    const rawFileKey = Buffer.from(decryptedBase64FileKey, 'base64')
-
-    if (!rawFileKey || !Buffer.isBuffer(rawFileKey)) {
-      throw new Error('File key is not a valid buffer')
-    }
+    const rawFileKey = this.#decryptFileKey(fileUpload)
 
     request.multipart.onFile(
       'file',
@@ -233,7 +310,7 @@ export default class FileUploadsController {
         fileUpload.merge({
           file_data: {
             ...fileUpload.file_data,
-            auth_tag: authTag.toString('hex'),
+            auth_tag: authTag.toString('base64'),
             location: key,
           },
         })
@@ -280,6 +357,25 @@ export default class FileUploadsController {
   }
 
   static #ENCRYPTION_PURPOSE = 'File Upload'
+
+  #decryptFileKey(fileUpload: FileUpload) {
+    const decryptedBase64FileKey = encryption.decrypt<string>(
+      fileUpload.file_data.encrypted_file_key,
+      FileUploadsController.#ENCRYPTION_PURPOSE
+    )
+
+    if (!decryptedBase64FileKey) {
+      throw new Error('Unable to decrypt file key')
+    }
+
+    const rawFileKey = Buffer.from(decryptedBase64FileKey, 'base64')
+
+    if (!rawFileKey || !Buffer.isBuffer(rawFileKey)) {
+      throw new Error('File key is not a valid buffer')
+    }
+
+    return rawFileKey
+  }
 }
 
 async function validateDownloadRequest(request: HttpContext['request']) {
