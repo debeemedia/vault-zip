@@ -33,6 +33,7 @@ export default class FileUploadsController {
       fileUploadsQuery
         .select(['id', 'title', 'file_data'])
         .where({ status: FileUploadStatuses.Completed })
+        .orderBy('updated_at', 'desc')
     })
 
     const fileUploads =
@@ -40,7 +41,7 @@ export default class FileUploadsController {
         id: upload.id,
         title: upload.title,
         original_file_name: upload.file_data.original_file_name,
-        file_size: `${(+upload.file_data.file_size / (1024 * 1024)).toFixed(2)} MB`,
+        file_size: `${(upload.file_data.file_size / (1024 * 1024)).toFixed(2)} MB`,
       })) ?? []
 
     return response.ok({ data: fileUploads })

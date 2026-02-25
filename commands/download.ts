@@ -87,7 +87,7 @@ export default class Download extends BaseCommand {
 
     const table = this.ui.table()
 
-    table.head(['ID', 'Title', 'Original File Name', ' File Size Approx'])
+    table.head(['ID', 'Title', 'Original File Name', 'File Size Approx'])
 
     data.data.forEach((file) => {
       table.row([file.id, file.title, file.original_file_name, file.file_size])
