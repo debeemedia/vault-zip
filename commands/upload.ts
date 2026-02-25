@@ -41,7 +41,7 @@ export default class Upload extends BaseCommand {
     }
 
     if (!fs.existsSync(this.filePath)) {
-      this.logger.error(`File not found at ${this.filePath}.`)
+      this.logger.error(`File not found at "${this.filePath}".`)
       return (this.exitCode = 1)
     }
 

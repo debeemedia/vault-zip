@@ -205,7 +205,7 @@ test.group('Upload', (group) => {
           break
 
         case 'file_not_found':
-          message = `File not found at ${testFilePath}.`
+          message = `File not found at "${testFilePath}".`
           break
 
         case 'file_type_not_supported':
