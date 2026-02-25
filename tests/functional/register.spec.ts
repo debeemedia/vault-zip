@@ -6,6 +6,7 @@ import Register from '../../commands/register.js'
 import User from '#models/user'
 import app from '@adonisjs/core/services/app'
 import { relative } from 'path'
+import ConfigService from '#services/config_service'
 
 test.group('Register', (group) => {
   group.each.setup(async () => {
@@ -62,6 +63,13 @@ test.group('Register', (group) => {
       assert.equal(rawUser.id, user!.id)
       assert.equal(rawUser.email, user!.email)
       assert.notEqual(rawUser.licence_key, user!.licence_key)
+
+      // Assert that the licence key is saved locally
+      const savedLicenceKey = await ConfigService.getLicenceKey()
+
+      assert.exists(savedLicenceKey)
+
+      assert.equal(savedLicenceKey, user!.licence_key)
     })
     .tags(['register'])
 })
