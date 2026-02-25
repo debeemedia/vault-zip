@@ -14,7 +14,7 @@ export default class Upload extends BaseCommand {
 
   @args.string({
     argumentName: 'file-path',
-    description: 'Path to the zip file.',
+    description: 'Path to the file, e.g. my_file.pdf. No spaces in between.',
   })
   declare filePath?: string
 

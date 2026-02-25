@@ -3,6 +3,15 @@ import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
 import User from './user.js'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 
+type FileData = {
+  original_file_name: string
+  file_size: number
+  iv: string
+  encrypted_file_key: string
+  auth_tag?: string
+  location?: string
+}
+
 export default class FileUpload extends BaseModel {
   @column({ isPrimary: true })
   declare id: string
@@ -17,7 +26,7 @@ export default class FileUpload extends BaseModel {
   declare status: FileUploadStatus
 
   @column()
-  declare file_data: Record<string, any>
+  declare file_data: FileData
 
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime

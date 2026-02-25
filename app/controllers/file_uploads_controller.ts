@@ -64,7 +64,7 @@ export default class FileUploadsController {
 
     const location = fileUpload.file_data.location
 
-    const encryptedStream = await drive.use('s3').getStream(location)
+    const encryptedStream = await drive.use('s3').getStream(location!)
 
     const rawFileKey = this.#decryptFileKey(fileUpload)
 
