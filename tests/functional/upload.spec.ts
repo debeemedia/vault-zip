@@ -82,7 +82,7 @@ test.group('Upload', (group) => {
 
       command.assertSucceeded()
 
-      command.assertLog('[ green(success) ] File upload successful.')
+      command.assertLog('[ green(success) ] File upload successful.', 'stdout')
 
       await user.load('fileUploads')
 
@@ -228,7 +228,7 @@ test.group('Upload', (group) => {
           throw new Error('Invalid condition')
       }
 
-      command.assertLog(`[ red(error) ] ${message}`)
+      command.assertLog(`[ red(error) ] ${message}`, 'stderr')
     })
     .tags(['upload'])
     .timeout(30000)
@@ -256,7 +256,7 @@ test.group('Upload', (group) => {
 
       command.assertSucceeded()
 
-      command.assertLog('[ green(success) ] File upload successful.')
+      command.assertLog('[ green(success) ] File upload successful.', 'stdout')
 
       await user.load('fileUploads')
 

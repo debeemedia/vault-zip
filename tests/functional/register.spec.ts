@@ -40,7 +40,8 @@ test.group('Register', (group) => {
         return command.assertLog(
           condition === 'email_already_exists'
             ? `[ red(error) ] Email already exists.`
-            : `[ red(error) ] Provide any email.`
+            : `[ red(error) ] Provide any email.`,
+          'stderr'
         )
       }
 
@@ -52,10 +53,11 @@ test.group('Register', (group) => {
       assert.isNotEmpty(user!.licence_key)
 
       command.assertLog(
-        `[ blue(info) ] Licence key saved locally to ./${relative(app.makePath(), 'vault_data/.config.test.json')}`
+        `[ blue(info) ] Licence key saved locally to ./${relative(app.makePath(), 'vault_data/.config.test.json')}`,
+        'stdout'
       )
 
-      command.assertLog(`[ green(success) ] Registration successful.`)
+      command.assertLog(`[ green(success) ] Registration successful.`, 'stdout')
 
       // Assert that the licence key returned (decrypted) is different from what is stored (encrypted)
       const rawUser = await db.from('users').where({ email }).first()
