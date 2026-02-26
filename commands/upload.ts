@@ -14,7 +14,7 @@ export default class Upload extends BaseCommand {
 
   @args.string({
     argumentName: 'file-path',
-    description: 'Path to the zip file.',
+    description: 'Path to the file, e.g. my_file.pdf. No spaces in between.',
   })
   declare filePath?: string
 
@@ -41,7 +41,7 @@ export default class Upload extends BaseCommand {
     }
 
     if (!fs.existsSync(this.filePath)) {
-      this.logger.error(`File not found at ${this.filePath}.`)
+      this.logger.error(`File not found at "${this.filePath}".`)
       return (this.exitCode = 1)
     }
 
@@ -111,6 +111,6 @@ export default class Upload extends BaseCommand {
       return (this.exitCode = 1)
     }
 
-    this.logger.info(data.message || 'File upload successful.')
+    this.logger.success(data.message || 'File upload successful.')
   }
 }

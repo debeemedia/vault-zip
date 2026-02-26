@@ -1,14 +1,15 @@
 import app from '@adonisjs/core/services/app'
-import { chmod, readFile, writeFile, mkdir} from 'fs/promises'
-import { relative, dirname } from 'path'
+import { chmod, readFile, writeFile, mkdir } from 'fs/promises'
+import { relative, dirname, join } from 'path'
+import fs from 'fs'
 
 export default class ConfigService {
-  static get #path() {
+  static get #licenceKeyPath() {
     return app.makePath('vault_data', app.inTest ? '.config.test.json' : '.config.json')
   }
 
   public static async saveLicenceKey(licenceKey: string): Promise<string> {
-    const filePath = this.#path
+    const filePath = this.#licenceKeyPath
 
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, JSON.stringify({ licenceKey }, null, 2))
@@ -25,9 +26,22 @@ export default class ConfigService {
 
   public static async getLicenceKey(): Promise<string | null> {
     try {
-      return JSON.parse(await readFile(this.#path, 'utf-8')).licenceKey
+      return JSON.parse(await readFile(this.#licenceKeyPath, 'utf-8')).licenceKey
     } catch (error) {
       return null
     }
+  }
+
+  public static getDownloadPath(fileName: string): string {
+    const pathFromRoot = app.makePath()
+    const downloadDir = join(pathFromRoot, app.inTest ? 'vault_downloads_test' : 'vault_downloads')
+
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir, { recursive: true })
+    }
+
+    const outputPath = join(downloadDir, fileName)
+
+    return `./${relative(pathFromRoot, outputPath)}`
   }
 }

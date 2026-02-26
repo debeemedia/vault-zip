@@ -17,6 +17,7 @@ import {
 } from '../../helpers/file_upload_helper.js'
 import AdmZip from 'adm-zip'
 import { randomBytes } from 'crypto'
+import fs from 'fs'
 
 const testDir = app.makePath('tmp', 'tests')
 
@@ -81,7 +82,7 @@ test.group('Upload', (group) => {
 
       command.assertSucceeded()
 
-      command.assertLog('[ blue(info) ] File upload successful.')
+      command.assertLog('[ green(success) ] File upload successful.', 'stdout')
 
       await user.load('fileUploads')
 
@@ -105,9 +106,12 @@ test.group('Upload', (group) => {
         'location',
         'encrypted_file_key',
         'original_file_name',
+        'file_size',
       ])
 
       assert.equal(join(testDir, upload.file_data.original_file_name), testFilePath)
+
+      assert.equal(fs.statSync(testFilePath).size, upload.file_data.file_size)
 
       const disk = drive.use('s3')
 
@@ -201,7 +205,7 @@ test.group('Upload', (group) => {
           break
 
         case 'file_not_found':
-          message = `File not found at ${testFilePath}.`
+          message = `File not found at "${testFilePath}".`
           break
 
         case 'file_type_not_supported':
@@ -224,7 +228,7 @@ test.group('Upload', (group) => {
           throw new Error('Invalid condition')
       }
 
-      command.assertLog(`[ red(error) ] ${message}`)
+      command.assertLog(`[ red(error) ] ${message}`, 'stderr')
     })
     .tags(['upload'])
     .timeout(30000)
@@ -252,7 +256,7 @@ test.group('Upload', (group) => {
 
       command.assertSucceeded()
 
-      command.assertLog('[ blue(info) ] File upload successful.')
+      command.assertLog('[ green(success) ] File upload successful.', 'stdout')
 
       await user.load('fileUploads')
 

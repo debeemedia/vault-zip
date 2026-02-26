@@ -14,22 +14,167 @@ import {
   allowedPattern,
   maxFileSizeMB,
 } from '../../helpers/file_upload_helper.js'
+import drive from '@adonisjs/drive/services/main'
+import { PassThrough } from 'node:stream'
 
 const stringRules = [rules.trim(), rules.escape()]
 
 export default class FileUploadsController {
+  public async index({ request, response }: HttpContext) {
+    const validationResult = await validateDownloadRequest(request)
+
+    if (typeof validationResult === 'string') {
+      return response.unprocessableEntity({ error: validationResult })
+    }
+
+    const { user } = validationResult
+
+    await user.load('fileUploads', (fileUploadsQuery) => {
+      fileUploadsQuery
+        .select(['id', 'title', 'file_data'])
+        .where({ status: FileUploadStatuses.Completed })
+        .orderBy('updated_at', 'desc')
+    })
+
+    const fileUploads =
+      user.fileUploads?.map((upload) => ({
+        id: upload.id,
+        title: upload.title,
+        original_file_name: upload.file_data.original_file_name,
+        file_size: `${(upload.file_data.file_size / (1024 * 1024)).toFixed(2)} MB`,
+      })) ?? []
+
+    return response.ok({ data: fileUploads })
+  }
+
+  public async show({ request, response, params }: HttpContext) {
+    const validationResult = await validateDownloadRequest(request)
+
+    if (typeof validationResult === 'string') {
+      return response.unprocessableEntity({ error: validationResult })
+    }
+
+    const { user } = validationResult
+
+    const fileUpload = await FileUpload.query()
+      .where({ id: params.id })
+      .whereHas('user', (userQuery) => {
+        userQuery.select('id').where({ id: user.id })
+      })
+      .firstOrFail()
+
+    const location = fileUpload.file_data.location
+
+    const encryptedStream = await drive.use('s3').getStream(location!)
+
+    const rawFileKey = this.#decryptFileKey(fileUpload)
+
+    const salt = crypto.randomBytes(16)
+
+    const derivedAESLicenceKey = await new Promise<Buffer>((resolve, reject) => {
+      crypto.scrypt(user.licence_key, salt, 32, (error, derivedKey) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(derivedKey)
+        }
+      })
+    })
+
+    const iv = crypto.randomBytes(12)
+
+    const cipher = crypto.createCipheriv('aes-256-gcm', derivedAESLicenceKey, iv)
+
+    const encryptedFileKey = Buffer.concat([cipher.update(rawFileKey), cipher.final()])
+
+    const authTag = cipher.getAuthTag()
+
+    /**
+     * Package everything needed for decrypting the encrypted file key and the encrypted file itself i.e. the salt, ivs and auth tags, as metadata to be bundled along with the encrypted file to the client.
+     */
+
+    const metadata = JSON.stringify({
+      keySalt: salt.toString('base64'),
+      keyIV: iv.toString('base64'),
+      keyAuthTag: authTag.toString('base64'),
+      wrappedKey: encryptedFileKey.toString('base64'),
+      fileIV: fileUpload.file_data.iv,
+      fileAuthTag: fileUpload.file_data.auth_tag,
+    })
+
+    const headerBuffer = Buffer.from(metadata)
+
+    /**
+     * IMPORTANT: We allocate 4 bytes to define the length of the metadata buffer.
+     * The client must read the first 4 bytes of the bundle to be sent as the instruction of where the metadata buffer ends. After the metadata is the encrypted file itself.
+     */
+
+    const lengthPrefix = Buffer.alloc(4)
+
+    lengthPrefix.writeUInt32BE(headerBuffer.length)
+
+    response.header('Content-Type', 'application/octet-stream')
+    response.header(
+      'Content-Disposition',
+      `attachment; filename=${fileUpload.file_data.original_file_name}.vault`
+    )
+
+    const combinedStream = new PassThrough()
+
+    // Handle streaming errors
+    combinedStream.on('error', (error) => {
+      console.error('Stream Error:', error)
+    })
+    encryptedStream.on('error', (error) => {
+      combinedStream.destroy(error)
+    })
+
+    let isFinished = false
+    encryptedStream.on('end', () => {
+      isFinished = true
+    })
+    // Handle user download cancellation
+    request.request.on('close', () => {
+      if (!isFinished) {
+        console.log('Download cancelled by user or network error.')
+      }
+
+      if (!combinedStream.destroyed) {
+        combinedStream.destroy()
+      }
+      if (!encryptedStream.destroyed) {
+        encryptedStream.destroy()
+      }
+    })
+
+    /**
+     * Connect the PassThrough stream to the response before writing any data. This handles "backpressure", allowing data to flow immediately to the client without buffering in the server's memory.
+     */
+    response.stream(combinedStream)
+
+    // Write 4-byte length indicator first
+    combinedStream.write(lengthPrefix)
+
+    // Write the JSON metadata buffer second
+    combinedStream.write(headerBuffer)
+
+    // Pipe the encrypted file data from S3 last. This automatically closes the stream.
+    encryptedStream.pipe(combinedStream)
+  }
+
   public async store({ request, response }: HttpContext) {
     const {
       title,
       email,
       file_name: originalFileName,
+      file_size: fileSize,
     } = await request.validate({
       schema: schema.create({
         title: schema.string([...stringRules, rules.maxLength(100)]),
         email: schema.string(stringRules),
         file_name: schema.string([...stringRules, rules.regex(allowedPattern)]),
         /**
-         * @todo For later: add the `file_size` column to the table to track the total storage used by the user/seller (for plan limits)
+         * @todo Future Consideration: Use this property to track the total storage used by the user for plan limits
          */
         file_size: schema.number([rules.range(0, maxFileSizeMB * 1024 * 1024)]),
       }),
@@ -71,8 +216,10 @@ export default class FileUploadsController {
       status: FileUploadStatuses.Pending,
       file_data: {
         encrypted_file_key: encryptedFileKey,
-        iv: iv.toString('hex'),
+        iv: iv.toString('base64'),
         original_file_name: originalFileName,
+        // File size saved in bytes
+        file_size: fileSize,
       },
     })
 
@@ -94,6 +241,8 @@ export default class FileUploadsController {
       messagesProvider: new SimpleMessagesProvider({
         'email.required': 'Email is required.',
         'email.exists': 'User does not exist.',
+        'database.required': 'The {{ field }} is required.',
+        'database.exists': 'The {{ field }} does not exist.',
       }),
     })
 
@@ -111,22 +260,9 @@ export default class FileUploadsController {
       return response.badRequest({ error: 'This file has already been uploaded.' })
     }
 
-    const iv = Buffer.from(fileUpload.file_data.iv, 'hex')
+    const iv = Buffer.from(fileUpload.file_data.iv, 'base64')
 
-    const decryptedBase64FileKey = encryption.decrypt<string>(
-      fileUpload.file_data.encrypted_file_key,
-      FileUploadsController.#ENCRYPTION_PURPOSE
-    )
-
-    if (!decryptedBase64FileKey) {
-      throw new Error('Unable to decrypt file key')
-    }
-
-    const rawFileKey = Buffer.from(decryptedBase64FileKey, 'base64')
-
-    if (!rawFileKey || !Buffer.isBuffer(rawFileKey)) {
-      throw new Error('File key is not a valid buffer')
-    }
+    const rawFileKey = this.#decryptFileKey(fileUpload)
 
     request.multipart.onFile(
       'file',
@@ -184,7 +320,7 @@ export default class FileUploadsController {
         fileUpload.merge({
           file_data: {
             ...fileUpload.file_data,
-            auth_tag: authTag.toString('hex'),
+            auth_tag: authTag.toString('base64'),
             location: key,
           },
         })
@@ -231,4 +367,59 @@ export default class FileUploadsController {
   }
 
   static #ENCRYPTION_PURPOSE = 'File Upload'
+
+  #decryptFileKey(fileUpload: FileUpload) {
+    const decryptedBase64FileKey = encryption.decrypt<string>(
+      fileUpload.file_data.encrypted_file_key,
+      FileUploadsController.#ENCRYPTION_PURPOSE
+    )
+
+    if (!decryptedBase64FileKey) {
+      throw new Error('Unable to decrypt file key')
+    }
+
+    const rawFileKey = Buffer.from(decryptedBase64FileKey, 'base64')
+
+    if (!rawFileKey || !Buffer.isBuffer(rawFileKey)) {
+      throw new Error('File key is not a valid buffer')
+    }
+
+    return rawFileKey
+  }
+}
+
+async function validateDownloadRequest(request: HttpContext['request']) {
+  const email = request.header('email')
+  const licenceKey = request.header('licence_key')
+
+  const { email: validatedEmail, licence_key: validatedLicenceKey } = await vine.validate({
+    data: { email, licence_key: licenceKey },
+    schema: vine.object({
+      email: vine
+        .string()
+        .trim()
+        .escape()
+        .exists({ column: 'email', table: 'users', caseInsensitive: true }),
+      licence_key: vine.string().trim().escape(),
+    }),
+
+    messagesProvider: new SimpleMessagesProvider({
+      'email.required': 'Email is required.',
+      'email.exists': 'Email does not exist.',
+      'licence_key.required': 'Licence Key is required.',
+      'database.required': 'The {{ field }} is required.',
+      'database.exists': 'The {{ field }} does not exist.',
+    }),
+  })
+
+  const user = await User.query()
+    .select(['id', 'licence_key'])
+    .where({ email: validatedEmail })
+    .first()
+
+  if (!user || user.licence_key !== validatedLicenceKey) {
+    return 'Provide your email with the corresponding licence key.'
+  }
+
+  return { user }
 }

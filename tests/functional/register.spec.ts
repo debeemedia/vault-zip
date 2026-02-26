@@ -6,6 +6,7 @@ import Register from '../../commands/register.js'
 import User from '#models/user'
 import app from '@adonisjs/core/services/app'
 import { relative } from 'path'
+import ConfigService from '#services/config_service'
 
 test.group('Register', (group) => {
   group.each.setup(async () => {
@@ -39,7 +40,8 @@ test.group('Register', (group) => {
         return command.assertLog(
           condition === 'email_already_exists'
             ? `[ red(error) ] Email already exists.`
-            : `[ red(error) ] Provide any email.`
+            : `[ red(error) ] Provide any email.`,
+          'stderr'
         )
       }
 
@@ -51,10 +53,11 @@ test.group('Register', (group) => {
       assert.isNotEmpty(user!.licence_key)
 
       command.assertLog(
-        `[ blue(info) ] Licence key saved locally to ./${relative(app.makePath(), 'vault_data/.config.test.json')}`
+        `[ blue(info) ] Licence key saved locally to ./${relative(app.makePath(), 'vault_data/.config.test.json')}`,
+        'stdout'
       )
 
-      command.assertLog(`[ blue(info) ] Registration successful.`)
+      command.assertLog(`[ green(success) ] Registration successful.`, 'stdout')
 
       // Assert that the licence key returned (decrypted) is different from what is stored (encrypted)
       const rawUser = await db.from('users').where({ email }).first()
@@ -62,6 +65,13 @@ test.group('Register', (group) => {
       assert.equal(rawUser.id, user!.id)
       assert.equal(rawUser.email, user!.email)
       assert.notEqual(rawUser.licence_key, user!.licence_key)
+
+      // Assert that the licence key is saved locally
+      const savedLicenceKey = await ConfigService.getLicenceKey()
+
+      assert.exists(savedLicenceKey)
+
+      assert.equal(savedLicenceKey, user!.licence_key)
     })
     .tags(['register'])
 })

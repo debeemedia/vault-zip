@@ -50,6 +50,7 @@ services:
     volumes:
       - ./vault_data:/app/vault_data
       - ./uploads_to_process:/app/uploads_to_process:ro
+      - ./vault_downloads:/app/vault_downloads
     environment:
       - TZ=UTC
       - PORT=3333
@@ -80,6 +81,7 @@ services:
       - minio_init
     volumes:
       - ./vault_data:/app/vault_data
+      - ./vault_downloads_test:/app/vault_downloads_test
       # # For active local testing in development
       # - ./:/app
       # - /app/node_modules
