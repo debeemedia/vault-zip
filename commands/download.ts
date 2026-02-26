@@ -33,7 +33,7 @@ export default class Download extends BaseCommand {
     }
 
     // If no licence key in config or if --override-key was used, prompt securely
-    if (!licenceKey) {
+    if (!licenceKey?.trim()) {
       licenceKey = await this.prompt.secure(
         this.overrideKey
           ? 'Enter the override licence key'
