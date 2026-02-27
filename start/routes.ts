@@ -9,11 +9,13 @@
 
 import router from '@adonisjs/core/services/router'
 
+// Resourceful routes for `users`.
 router
   .resource('users', () => import('#controllers/users_controller'))
   .apiOnly()
   .only(['store'])
 
+// Resourceful routes for `file_uploads`.
 router
   .resource('file_uploads', () => import('#controllers/file_uploads_controller'))
   .apiOnly()

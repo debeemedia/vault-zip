@@ -20,6 +20,11 @@ import { PassThrough } from 'node:stream'
 const stringRules = [rules.trim(), rules.escape()]
 
 export default class FileUploadsController {
+  /**
+   * List uploaded (encrypted) files for a user.
+   *
+   * `GET /file_uploads`
+   */
   public async index({ request, response }: HttpContext) {
     const validationResult = await validateDownloadRequest(request)
 
@@ -47,6 +52,12 @@ export default class FileUploadsController {
     return response.ok({ data: fileUploads })
   }
 
+  /**
+   * Download an encrypted file for a user.
+   * NB: File decryption is client-side.
+   *
+   * `GET /file_uploads/:id`
+   */
   public async show({ request, response, params }: HttpContext) {
     const validationResult = await validateDownloadRequest(request)
 
@@ -162,6 +173,11 @@ export default class FileUploadsController {
     encryptedStream.pipe(combinedStream)
   }
 
+  /**
+   * Initialise a file upload for a user.
+   *
+   * `POST /file_uploads`
+   */
   public async store({ request, response }: HttpContext) {
     const {
       title,
@@ -226,6 +242,11 @@ export default class FileUploadsController {
     return response.created({ message: 'File upload initialised.', fileUploadId: fileUpload.id })
   }
 
+  /**
+   * Upload and encrypt a file for a user.
+   *
+   * `POST /file_uploads/:file_upload_id`
+   */
   public async upload({ request, response, params }: HttpContext) {
     const email = request.header('email')
 
