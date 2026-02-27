@@ -14,6 +14,9 @@ import ConfigService from '#services/config_service'
 import { Readable } from 'stream'
 import { TestContext } from '@japa/runner/core'
 
+const targetUserFileTitlePrefix = 'Target User'
+const anotherUserFileTitlePrefix = 'Another User'
+
 test.group('Download', (group) => {
   group.each.setup(async () => {
     ace.ui.switchMode('raw')
@@ -45,14 +48,26 @@ test.group('Download', (group) => {
 
       // Register the user first
       const email = 'test@example.com'
+      // Also register another user to assert that that user's files are not returned for the target user
+      const users = await User.createMany(
+        [email, 'another@example.com'].map((email) => ({
+          email,
+          licence_key: cuid(),
+        }))
+      )
 
-      const user = await User.create({ email, licence_key: cuid() })
+      assert.lengthOf(users, 2)
 
-      await ConfigService.saveLicenceKey(isLicenceKeyNotSavedLocally ? '' : user.licence_key)
+      const user = users.find((u) => u.email === email)
+      assert.exists(user)
 
-      // Upload some files for the user
+      await ConfigService.saveLicenceKey(isLicenceKeyNotSavedLocally ? '' : user!.licence_key)
+
+      // Upload some files for the users
       if (!isNoFileUploaded) {
-        await uploadFiles({ assert, user })
+        for (const u of users) {
+          await uploadFiles({ assert, user: u, isNotTargetUser: u.email !== email })
+        }
       }
 
       const command = await ace.create(Download, [
@@ -64,11 +79,11 @@ test.group('Download', (group) => {
       if (isLicenceKeyNotSavedLocally) {
         command.prompt
           .trap('Enter your licence key (not found in config).')
-          .replyWith(user.licence_key)
+          .replyWith(user!.licence_key)
       }
 
       if (isOverrideKeyProvided) {
-        command.prompt.trap('Enter the override licence key').replyWith(user.licence_key)
+        command.prompt.trap('Enter the override licence key').replyWith(user!.licence_key)
       }
 
       if (!isNoFileUploaded) {
@@ -92,7 +107,8 @@ test.group('Download', (group) => {
         )
       }
 
-      const fileTableData = user.fileUploads.map((upload) => [
+      // Assert that the target user's files are returned
+      const fileTableData = user!.fileUploads.map((upload) => [
         upload.id,
         upload.title,
         upload.file_data.original_file_name,
@@ -104,10 +120,25 @@ test.group('Download', (group) => {
         ...fileTableData,
       ])
 
+      // Assert that the logs pertaining to file data are for the target user's files
+      const fileLogs = command.ui.logger
+        .getLogs()
+        .filter(
+          (log) =>
+            log.message.includes('MB') /** e.g. under File Size Approx: 1.00 MB */ &&
+            log.stream === 'stdout'
+        )
+
+      assert.lengthOf(fileLogs, user!.fileUploads.length)
+
+      assert.isTrue(fileLogs.every((log) => log.message.includes(targetUserFileTitlePrefix)))
+
+      assert.isFalse(fileLogs.some((log) => log.message.includes(anotherUserFileTitlePrefix)))
+
       command.assertLog('[ blue(info) ] Downloading encrypted bundle...', 'stdout')
 
       // We selected the latest file for download
-      const responseFileName = `${user.fileUploads[0].file_data.original_file_name}.vault`
+      const responseFileName = `${user!.fileUploads[0].file_data.original_file_name}.vault`
 
       const outputPath = ConfigService.getDownloadPath(responseFileName)
 
@@ -119,8 +150,12 @@ test.group('Download', (group) => {
       // Cleanup
       await rm(outputPath, { force: true })
 
-      for (const upload of user.fileUploads) {
-        await drive.use('s3').delete(upload.file_data.location!)
+      for (const u of users) {
+        await u.load('fileUploads')
+
+        for (const upload of u.fileUploads) {
+          await drive.use('s3').delete(upload.file_data.location!)
+        }
       }
     })
     .tags(['download'])
@@ -200,8 +235,17 @@ test.group('Download', (group) => {
 /**
  * Upload files for a user
  */
-async function uploadFiles({ assert, user }: { assert: TestContext['assert']; user: User }) {
-  const titles = ['1st file', '2nd file']
+async function uploadFiles({
+  assert,
+  user,
+  isNotTargetUser,
+}: {
+  assert: TestContext['assert']
+  user: User
+  isNotTargetUser?: boolean
+}) {
+  const titlePrefix = isNotTargetUser ? anotherUserFileTitlePrefix : targetUserFileTitlePrefix
+  const titles = [`${titlePrefix} 1st File`, `${titlePrefix} 2nd File`]
 
   const fileNames = titles.map((title) => `${title.replace(/\s+/g, '_')}.zip`)
 
