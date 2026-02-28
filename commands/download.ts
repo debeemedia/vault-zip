@@ -4,6 +4,7 @@ import fs from 'fs'
 import ConfigService from '#services/config_service'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { resolveLicenceKey } from '../helpers/command_helper.js'
 
 export default class Download extends BaseCommand {
   static commandName = 'vault-zip:download'
@@ -26,23 +27,13 @@ export default class Download extends BaseCommand {
       return (this.exitCode = 1)
     }
 
-    let licenceKey: string | null = null
+    const licenceKey = await resolveLicenceKey({
+      logger: this.logger,
+      overrideKey: this.overrideKey,
+      prompt: this.prompt,
+    })
 
-    if (!this.overrideKey) {
-      licenceKey = await ConfigService.getLicenceKey()
-    }
-
-    // If no licence key in config or if --override-key was used, prompt securely
-    if (!licenceKey?.trim()) {
-      licenceKey = await this.prompt.secure(
-        this.overrideKey
-          ? 'Enter the override licence key'
-          : 'Enter your licence key (not found in config).'
-      )
-    }
-
-    if (!licenceKey?.trim()) {
-      this.logger.error('Licence key is required.')
+    if (!licenceKey) {
       return (this.exitCode = 1)
     }
 
