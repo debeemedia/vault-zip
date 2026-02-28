@@ -21,18 +21,10 @@ export default class Decrypt extends BaseCommand {
   })
   declare filePath?: string
 
-  @flags.string()
-  declare email?: string
-
   @flags.boolean({ description: 'Manually enter a different licence key.' })
   declare overrideKey?: boolean
 
   async run() {
-    if (!this.email?.trim()) {
-      this.logger.error('Provide your email.')
-      return (this.exitCode = 1)
-    }
-
     const licenceKey = await resolveLicenceKey({
       logger: this.logger,
       overrideKey: this.overrideKey,
@@ -121,6 +113,7 @@ export default class Decrypt extends BaseCommand {
 
       this.logger.success(`File has been successfully decrypted to: "${outputPath}"`)
     } catch (error) {
+      console.log(error)
       if (
         error.message?.includes('Unsupported state') ||
         error.message?.includes('unable to authenticate data')
