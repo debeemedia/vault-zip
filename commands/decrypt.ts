@@ -63,8 +63,24 @@ export default class Decrypt extends BaseCommand {
       // 1. Read the first 4 bytes to get the header size
       const headerSize = encryptedFileBuffer.readUInt32BE(0)
 
+      // Validate the file: by checking the metadata JSON size. JSON bigger than 10KB is suspicious
+      if (headerSize < 100 || headerSize > 10000) {
+        this.logger.error('Invalid vault file: Header size is out of bounds.')
+
+        return (this.exitCode = 1)
+      }
+
       // 2. Extract the metadata JSON based on that size
       const metadataRaw = encryptedFileBuffer.subarray(4, 4 + headerSize)
+
+      // Validate the file signature: by checking for the opening and closing braces of the metadata JSON.
+      // In ASCII, "{" is 123 and "}" is 125
+      if (metadataRaw[0] !== 123 || metadataRaw[metadataRaw.length - 1] !== 125) {
+        this.logger.error('Invalid vault file: Metadata is not a valid JSON object.')
+
+        return (this.exitCode = 1)
+      }
+
       const metadata = JSON.parse(metadataRaw.toString()) as FileMetadata
 
       // 3. Everything after (4 + headerSize) is the encrypted file data
