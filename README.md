@@ -103,6 +103,37 @@ Upon running the download command, you should see a formatted table of your avai
 **Local Storage Layer (`./vault_downloads`)**
 Check your project's directory for a `./vault_downloads` directory. You will find a `.vault` file. Even though this file exists on your hard drive, it remains fully encrypted.
 
+4. Decryption (Unlocking the Asset)
+
+Now that you have the encrypted `.vault` file, use your licence key to decrypt it. This process is done entirely on the client; your licence key is never sent to the server during this phase.
+
+```bash
+docker compose exec app node ace vault-zip:decrypt ./vault_downloads/your_file.pdf.vault
+```
+
+**Note on Security:** To prevent your License Key from leaking into shell history or process logs, the command will securely prompt you for the key if it isn't found in your local configuration (`./vault_data/.config.json`).
+
+Upon running the command, you should see your now decrypted file in the `vault_downloads` folder.
+
+🔍 How to Verify Authenticated Decryption
+
+**Wrong Licence Key**
+You can attempt to decrypt with a wrong key by manually overriding the licence key in your config using the `--override-key` flag:
+
+```bash
+docker compose exec app node ace vault-zip:decrypt ./vault_downloads/your_file.pdf.vault --override-key
+```
+
+You will be prompted to input a licence key.
+
+**File Tampering**
+You can also manually modify even a single byte of the `.vault` file (try it in a [hex editor](https://hexed.it/)).
+Note: When testing with a hex editor, modify a byte toward the end of the file. This ensures you are tampering with the encrypted payload rather than the metadata header, allowing you to see the AES-GCM authentication failure in action.
+
+The command will fail and any corrupted output will be automatically deleted to protect your workspace.
+
+The entire decryption process is designed to be **memory-efficient** even for large files.
+
 ## Functional Tests
 
 Run the full test suite:
