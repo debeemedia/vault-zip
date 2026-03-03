@@ -28,6 +28,20 @@ Process: The file remains encrypted with its original DEK, but that DEK is now p
 
 Security: This ensures the downloaded `.vault` bundle is cryptographically locked to the buyer. Even if the file is leaked, it cannot be decrypted without the specific License Key used during the download, preventing unauthorized redistribution.
 
+## 🔓 Decryption & Integrity (The Client Side)
+
+The final stage of the DRM process occurs entirely on the user's local machine. The server provides a `.vault` bundle containing the encrypted file and the metadata required to unlock it.
+
+The Decryption Process:
+
+- Key Derivation: The CLI derives a transient AES key from the user's License Key and the salt provided in the bundle.
+
+- Key Unwrapping: This derived key is used to decrypt the Wrapped DEK.
+
+- Stream Decryption: The raw file is decrypted via AES-256-GCM using the recovered DEK and the stored IV.
+
+- Authentication Check: Before finalizing the file, the CLI verifies the Authentication Tag. If even a single bit of the file was tampered with during transit or storage, the process aborts and the file is deleted.
+
 ## 🚀 Quick Start (Docker)
 
 This project is fully containerized. You only need Docker to get started.
