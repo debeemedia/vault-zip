@@ -5,17 +5,13 @@ import { cuid } from '@adonisjs/core/helpers'
 import User from '#models/user'
 import { rm } from 'fs/promises'
 import drive from '@adonisjs/drive/services/main'
-import FileUpload, { FileUploadStatuses } from '#models/file_upload'
-import AdmZip from 'adm-zip'
-import encryption from '@adonisjs/core/services/encryption'
-import crypto from 'crypto'
 import Download from '../../commands/download.js'
 import ConfigService from '#services/config_service'
-import { Readable } from 'stream'
-import { TestContext } from '@japa/runner/core'
-
-const targetUserFileTitlePrefix = 'Target User'
-const anotherUserFileTitlePrefix = 'Another User'
+import {
+  anotherUserFileTitlePrefix,
+  targetUserFileTitlePrefix,
+  uploadFiles,
+} from '../../helpers/test_helper.js'
 
 test.group('Download', (group) => {
   group.each.setup(async () => {
@@ -231,77 +227,3 @@ test.group('Download', (group) => {
     })
     .tags(['download'])
 })
-
-/**
- * Upload files for a user
- */
-async function uploadFiles({
-  assert,
-  user,
-  isNotTargetUser,
-}: {
-  assert: TestContext['assert']
-  user: User
-  isNotTargetUser?: boolean
-}) {
-  const titlePrefix = isNotTargetUser ? anotherUserFileTitlePrefix : targetUserFileTitlePrefix
-  const titles = [`${titlePrefix} 1st File`, `${titlePrefix} 2nd File`]
-
-  const fileNames = titles.map((title) => `${title.replace(/\s+/g, '_')}.zip`)
-
-  const textFileNames = ['test1.txt', 'test2.txt']
-
-  for (let i = 0; i < 2; i++) {
-    const zipFile = new AdmZip()
-    zipFile.addFile(textFileNames[i], crypto.randomBytes(1024 * 1024 * 1))
-
-    const buffer = zipFile.toBuffer()
-    const fileSize = buffer.length
-
-    const stream = Readable.from(buffer)
-
-    const rawFileKey = crypto.randomBytes(32)
-
-    const encryptedFileKey = encryption.encrypt(
-      rawFileKey.toString('base64'),
-      undefined,
-      'File Upload'
-    )
-
-    const iv = crypto.randomBytes(12)
-
-    const cipher = crypto.createCipheriv('aes-256-gcm', rawFileKey, iv)
-
-    const encryptedStream = stream.pipe(cipher)
-
-    const disk = drive.use('s3')
-
-    await disk.putStream(fileNames[i], encryptedStream, {
-      contentType: 'application/zip',
-      contentLength: fileSize,
-    })
-
-    const authTag = cipher.getAuthTag()
-
-    assert.isTrue(await disk.exists(fileNames[i]))
-
-    await FileUpload.create({
-      title: titles[i],
-      status: FileUploadStatuses.Completed,
-      user_id: user.id,
-      file_data: {
-        iv: iv.toString('base64'),
-        encrypted_file_key: encryptedFileKey,
-        file_size: fileSize,
-        original_file_name: fileNames[i],
-        auth_tag: authTag.toString('base64'),
-        location: fileNames[i],
-      },
-    })
-  }
-
-  await user.load('fileUploads', (fileUploadsQuery) => {
-    fileUploadsQuery.orderBy('updated_at', 'desc') // Files will be returned in descending order of update
-  })
-  assert.lengthOf(user.fileUploads, 2)
-}
