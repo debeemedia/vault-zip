@@ -28,6 +28,20 @@ Process: The file remains encrypted with its original DEK, but that DEK is now p
 
 Security: This ensures the downloaded `.vault` bundle is cryptographically locked to the buyer. Even if the file is leaked, it cannot be decrypted without the specific License Key used during the download, preventing unauthorized redistribution.
 
+## 🔓 Decryption & Integrity (The Client Side)
+
+The final stage of the DRM process occurs entirely on the user's local machine. The server provides a `.vault` bundle containing the encrypted file and the metadata required to unlock it.
+
+The Decryption Process:
+
+- Key Derivation: The CLI derives a transient AES key from the user's License Key and the salt provided in the bundle.
+
+- Key Unwrapping: This derived key is used to decrypt the Wrapped DEK.
+
+- Stream Decryption: The raw file is decrypted via AES-256-GCM using the recovered DEK and the stored IV.
+
+- Authentication Check: Before finalizing the file, the CLI verifies the Authentication Tag. If even a single bit of the file was tampered with during transit or storage, the process aborts and the file is deleted.
+
 ## 🚀 Quick Start (Docker)
 
 This project is fully containerized. You only need Docker to get started.
@@ -102,6 +116,37 @@ Upon running the download command, you should see a formatted table of your avai
 
 **Local Storage Layer (`./vault_downloads`)**
 Check your project's directory for a `./vault_downloads` directory. You will find a `.vault` file. Even though this file exists on your hard drive, it remains fully encrypted.
+
+4. Decryption (Unlocking the Asset)
+
+Now that you have the encrypted `.vault` file, use your licence key to decrypt it. This process is done entirely on the client; your licence key is never sent to the server during this phase.
+
+```bash
+docker compose exec app node ace vault-zip:decrypt ./vault_downloads/your_file.pdf.vault
+```
+
+**Note on Security:** To prevent your License Key from leaking into shell history or process logs, the command will securely prompt you for the key if it isn't found in your local configuration (`./vault_data/.config.json`).
+
+Upon running the command, you should see your now decrypted file in the `vault_downloads` folder.
+
+**Predictable Performance:** The decryption process is designed to be memory-efficient even for large files, and maintains a constant memory footprint (approx. 200MB RSS). Because it streams data instead of buffering, decrypting a 108MB file uses about the same amount of RAM as a 108KB file, ensuring stability on low-spec servers or Docker containers.
+
+🔍 How to Verify Authenticated Decryption
+
+**Wrong Licence Key**
+You can attempt to decrypt with a wrong key by manually overriding the licence key in your config using the `--override-key` flag:
+
+```bash
+docker compose exec app node ace vault-zip:decrypt ./vault_downloads/your_file.pdf.vault --override-key
+```
+
+You will be prompted to input a licence key.
+
+**File Tampering**
+You can also manually modify even a single byte of the `.vault` file (try it in a [hex editor](https://hexed.it/)).
+Note: When testing with a hex editor, modify a byte toward the end of the file. This ensures you are tampering with the encrypted payload rather than the metadata header, allowing you to see the AES-GCM authentication failure in action.
+
+The command will fail and any corrupted output will be automatically deleted to protect your workspace.
 
 ## Functional Tests
 

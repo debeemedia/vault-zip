@@ -5,6 +5,11 @@ import db from '@adonisjs/lucid/services/db'
 import { rules, schema } from '@adonisjs/validator'
 
 export default class UsersController {
+  /**
+   * Register a user.
+   *
+   * `POST /users`
+   */
   public async store({ request, response }: HttpContext) {
     const { email } = await request.validate({
       schema: schema.create({

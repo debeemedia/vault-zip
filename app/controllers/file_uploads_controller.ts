@@ -13,6 +13,7 @@ import {
   allowedExtensions,
   allowedPattern,
   maxFileSizeMB,
+  generateMetadataBuffer,
 } from '../../helpers/file_upload_helper.js'
 import drive from '@adonisjs/drive/services/main'
 import { PassThrough } from 'node:stream'
@@ -20,6 +21,11 @@ import { PassThrough } from 'node:stream'
 const stringRules = [rules.trim(), rules.escape()]
 
 export default class FileUploadsController {
+  /**
+   * List uploaded (encrypted) files for a user.
+   *
+   * `GET /file_uploads`
+   */
   public async index({ request, response }: HttpContext) {
     const validationResult = await validateDownloadRequest(request)
 
@@ -47,6 +53,12 @@ export default class FileUploadsController {
     return response.ok({ data: fileUploads })
   }
 
+  /**
+   * Download an encrypted file for a user.
+   * NB: File decryption is client-side.
+   *
+   * `GET /file_uploads/:id`
+   */
   public async show({ request, response, params }: HttpContext) {
     const validationResult = await validateDownloadRequest(request)
 
@@ -69,49 +81,14 @@ export default class FileUploadsController {
 
     const rawFileKey = this.#decryptFileKey(fileUpload)
 
-    const salt = crypto.randomBytes(16)
-
-    const derivedAESLicenceKey = await new Promise<Buffer>((resolve, reject) => {
-      crypto.scrypt(user.licence_key, salt, 32, (error, derivedKey) => {
-        if (error) {
-          reject(error)
-        } else {
-          resolve(derivedKey)
-        }
-      })
-    })
-
-    const iv = crypto.randomBytes(12)
-
-    const cipher = crypto.createCipheriv('aes-256-gcm', derivedAESLicenceKey, iv)
-
-    const encryptedFileKey = Buffer.concat([cipher.update(rawFileKey), cipher.final()])
-
-    const authTag = cipher.getAuthTag()
-
     /**
-     * Package everything needed for decrypting the encrypted file key and the encrypted file itself i.e. the salt, ivs and auth tags, as metadata to be bundled along with the encrypted file to the client.
+     * Generate a header metadata buffer to be bundled along with the encrypted file to the client
      */
-
-    const metadata = JSON.stringify({
-      keySalt: salt.toString('base64'),
-      keyIV: iv.toString('base64'),
-      keyAuthTag: authTag.toString('base64'),
-      wrappedKey: encryptedFileKey.toString('base64'),
-      fileIV: fileUpload.file_data.iv,
-      fileAuthTag: fileUpload.file_data.auth_tag,
+    const { headerBuffer, lengthPrefix } = await generateMetadataBuffer({
+      fileUpload,
+      rawFileKey,
+      user,
     })
-
-    const headerBuffer = Buffer.from(metadata)
-
-    /**
-     * IMPORTANT: We allocate 4 bytes to define the length of the metadata buffer.
-     * The client must read the first 4 bytes of the bundle to be sent as the instruction of where the metadata buffer ends. After the metadata is the encrypted file itself.
-     */
-
-    const lengthPrefix = Buffer.alloc(4)
-
-    lengthPrefix.writeUInt32BE(headerBuffer.length)
 
     response.header('Content-Type', 'application/octet-stream')
     response.header(
@@ -152,16 +129,25 @@ export default class FileUploadsController {
      */
     response.stream(combinedStream)
 
-    // Write 4-byte length indicator first
+    /**
+     * IMPORTANT: The following steps should be noted by the client for unpacking the encrypted bundle to be sent:
+     */
+
+    // 1. Write 4-byte length indicator first
     combinedStream.write(lengthPrefix)
 
-    // Write the JSON metadata buffer second
+    // 2. Write the JSON metadata buffer second
     combinedStream.write(headerBuffer)
 
-    // Pipe the encrypted file data from S3 last. This automatically closes the stream.
+    // 3. Pipe the encrypted file data from S3 last. This automatically closes the stream.
     encryptedStream.pipe(combinedStream)
   }
 
+  /**
+   * Initialise a file upload for a user.
+   *
+   * `POST /file_uploads`
+   */
   public async store({ request, response }: HttpContext) {
     const {
       title,
@@ -226,6 +212,11 @@ export default class FileUploadsController {
     return response.created({ message: 'File upload initialised.', fileUploadId: fileUpload.id })
   }
 
+  /**
+   * Upload and encrypt a file for a user.
+   *
+   * `POST /file_uploads/:file_upload_id`
+   */
   public async upload({ request, response, params }: HttpContext) {
     const email = request.header('email')
 
