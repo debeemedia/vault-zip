@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs'
 import Decrypt from '../../commands/decrypt.js'
 import { basename } from 'node:path'
 import { uploadFiles } from '../../helpers/test_helper.js'
+import fs from 'node:fs'
 
 test.group('Decrypt', (group) => {
   group.each.setup(async () => {
@@ -101,6 +102,84 @@ test.group('Decrypt', (group) => {
 
       await user.load('fileUploads')
 
+      for (const upload of user.fileUploads) {
+        await drive.use('s3').delete(upload.file_data.location!)
+      }
+    })
+    .tags(['decrypt'])
+
+  test('should fail to decrypt if: {$self}')
+    .with([
+      'licence_key_not_provided',
+      'incorrect_licence_key',
+      'encrypted_file_tampered_with',
+    ] as const)
+    .run(async ({ assert }, condition) => {
+      const email = 'test@example.com'
+
+      const user = await User.create({ email, licence_key: cuid() })
+
+      const uploadResult = await uploadFiles({ assert, user, saveLocally: true })
+
+      assert.isDefined(uploadResult)
+
+      // To resolve type error
+      if (!uploadResult) {
+        return
+      }
+
+      const { encryptedFileOutputPaths } = uploadResult
+
+      if (condition === 'encrypted_file_tampered_with') {
+        fs.appendFileSync(encryptedFileOutputPaths[0], 'Tampered')
+      }
+
+      const command = await ace.create(Decrypt, [encryptedFileOutputPaths[0], '--override-key'])
+
+      // Trap the prompt before executing the command
+      command.prompt
+        .trap('Enter the override licence key')
+        .replyWith(
+          condition === 'licence_key_not_provided'
+            ? ''
+            : condition === 'incorrect_licence_key'
+              ? cuid()
+              : user.licence_key
+        )
+
+      await command.exec()
+
+      command.assertFailed()
+
+      let message = ''
+
+      switch (condition) {
+        case 'licence_key_not_provided':
+          message = 'Licence key is required.'
+          break
+
+        case 'incorrect_licence_key':
+        case 'encrypted_file_tampered_with':
+          message = 'Decryption failed. The file was modified or the licence key is incorrect.'
+          break
+
+        default:
+          throw new Error('Invalid condition')
+      }
+
+      command.assertLog(`[ red(error) ] ${message}`, 'stderr')
+
+      // Assert that any corrupted file was cleaned up
+      const decryptedFileOutputPath = encryptedFileOutputPaths[0].replace(/\.vault$/, '')
+
+      assert.isFalse(fs.existsSync(decryptedFileOutputPath))
+
+      // Cleanup
+      for (const path of encryptedFileOutputPaths) {
+        await rm(path, { force: true })
+      }
+
+      await user.load('fileUploads')
       for (const upload of user.fileUploads) {
         await drive.use('s3').delete(upload.file_data.location!)
       }
