@@ -113,6 +113,9 @@ test.group('Decrypt', (group) => {
       'licence_key_not_provided',
       'incorrect_licence_key',
       'encrypted_file_tampered_with',
+      'bundle_extname_not_.vault',
+      'bundle_header_out_of_bounds',
+      'bundle_metadata_malformed',
     ] as const)
     .run(async ({ assert }, condition) => {
       const email = 'test@example.com'
@@ -134,7 +137,39 @@ test.group('Decrypt', (group) => {
         fs.appendFileSync(encryptedFileOutputPaths[0], 'Tampered')
       }
 
-      const command = await ace.create(Decrypt, [encryptedFileOutputPaths[0], '--override-key'])
+      let nonVaultPath = encryptedFileOutputPaths[0].replace(/\.vault$/, '.pdf')
+
+      if (condition === 'bundle_extname_not_.vault') {
+        fs.copyFileSync(encryptedFileOutputPaths[0], nonVaultPath)
+      }
+
+      if (condition === 'bundle_header_out_of_bounds') {
+        const fd = fs.openSync(encryptedFileOutputPaths[0], 'r+')
+
+        const buffer = Buffer.alloc(4)
+        buffer.writeUInt32BE(20000)
+
+        // Write an unrealistic number into the first 4 bytes so that the CLI tries to read more than the metadata size
+        fs.writeSync(fd, buffer, 0, 4, 0)
+
+        fs.closeSync(fd)
+      }
+
+      if (condition === 'bundle_metadata_malformed') {
+        const fd = fs.openSync(encryptedFileOutputPaths[0], 'r+')
+
+        const garbage = Buffer.from('NOT_JSON_LOGIC')
+
+        // Overwrite the actual metadata with garbage
+        fs.writeSync(fd, garbage, 0, garbage.length, 4)
+
+        fs.closeSync(fd)
+      }
+
+      const command = await ace.create(Decrypt, [
+        condition === 'bundle_extname_not_.vault' ? nonVaultPath : encryptedFileOutputPaths[0],
+        '--override-key',
+      ])
 
       // Trap the prompt before executing the command
       command.prompt
@@ -163,6 +198,18 @@ test.group('Decrypt', (group) => {
           message = 'Decryption failed. The file was modified or the licence key is incorrect.'
           break
 
+        case 'bundle_extname_not_.vault':
+          message = 'Provide a ".vault" file.'
+          break
+
+        case 'bundle_header_out_of_bounds':
+          message = 'Invalid vault file: Header size is out of bounds.'
+          break
+
+        case 'bundle_metadata_malformed':
+          message = 'Invalid vault file: Metadata is not a valid JSON object.'
+          break
+
         default:
           throw new Error('Invalid condition')
       }
@@ -175,7 +222,7 @@ test.group('Decrypt', (group) => {
       assert.isFalse(fs.existsSync(decryptedFileOutputPath))
 
       // Cleanup
-      for (const path of encryptedFileOutputPaths) {
+      for (const path of [...encryptedFileOutputPaths, nonVaultPath]) {
         await rm(path, { force: true })
       }
 
