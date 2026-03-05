@@ -155,10 +155,26 @@ Note: When testing with a hex editor, modify a byte toward the end of the file. 
 
 The command will fail and any corrupted output will be automatically deleted to protect your workspace.
 
-## Functional Tests
+## 🧪 Testing & Reliability
 
-Run the full test suite:
+The suite provides 100% command coverage, ensuring the system is resilient against malformed data and malicious tampering.
+
+You can run all the tests with one quick command:
 
 ```bash
 docker compose run --rm tester
 ```
+
+- Comprehensive Command Coverage: Exhaustive integration tests for `register`, `upload`, `list`, `download`, and `decrypt`. Every command tested against database and cloud (S3/MinIO) storage drivers.
+
+- Strict Validation: Covers all failure modes including missing/duplicate emails, title constraints, and file size/type violations.
+
+- Large File Support: Verified handling of multi-megabyte streams near the maximum size limit.
+
+- Binary & Metadata Integrity: Validates rejection of tampered bundles, malformed JSON metadata, and out-of-bounds headers.
+
+- Environment Resilience: Tests terminal-width edge cases, license key storage, and interactive prompt overrides.
+
+- System Cleanliness: Verifies automatic cleanup of all temporary files and "ghost" data after both successful and failed operations.
+
+- Automated Cleanup: Ensures absolute cleanup of all temporary artifacts and test-generated data (local and S3) after every run.
