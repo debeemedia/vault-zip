@@ -46,7 +46,7 @@ The Decryption Process:
 
 This project is fully containerized. You only need Docker to get started.
 
-1. Spin up the Infrastructure
+### 1. Spin up the Infrastructure
 
 ```bash
 docker compose up --build -d
@@ -54,9 +54,9 @@ docker compose up --build -d
 
 _Starts the AdonisJS app, PostgreSQL, and MinIO (S3 storage)._
 
-2. Register Your Identity
+### 2. Register Your Identity
 
-   This command creates your user profile and generates a License Key.
+This command creates your user profile and generates a License Key.
 
 - The "Dual Role" Demo: In this project, you are acting as both the Seller (storing the asset) and the Buyer (using a license to unlock it).
 
@@ -74,7 +74,7 @@ To verify that the licence key stored in the database is encrypted:
 docker compose exec db psql -U postgres -d vault_zip -c "\x" -c "SELECT email, licence_key FROM users;"
 ```
 
-3. Encrypted Upload
+### 3. Encrypted Upload
 
 Files are encrypted via a streaming pipeline and sent directly to MinIO. Ensure your file is located in the `./uploads_to_process` folder.
 
@@ -85,18 +85,20 @@ docker compose exec app node ace vault-zip:upload --email=your_email --title="My
 🔍 How to Verify the File Encryption
 
 **Storage Layer (MinIO)**
+
 - Visit the MinIO Console at http://localhost:9001.
 - In your `docker-compose.yml`, look under `services` -> `app` -> `environment`. Use `AWS_ACCESS_KEY_ID` as the username and `AWS_SECRET_ACCESS_KEY` as the password.
 - Locate your file in the vault-zip bucket. Any manual download will result in unreadable binary gibberish, confirming that AES-256-GCM encryption is active and the raw data is protected at rest.
 
 **Database Layer (PostgreSQL)**
+
 To verify that the cryptographic fingerprints (IV, Auth Tag, and Encrypted Key) are properly stored:
 
 ```bash
 docker compose exec db psql -U postgres -d vault_zip -c "\x" -c "SELECT title, status, file_data FROM file_uploads;"
 ```
 
-4. Secure Download (Distribution Encryption)
+### 4. Secure Download (Distribution Encryption)
 
 Download your encrypted bundle from the vault. The system re-encrypts the file's access key with your License Key during transit, creating a unique `.vault` file tied specifically to your credentials.
 
@@ -117,9 +119,10 @@ Upon running the download command, you should see a formatted table of your avai
 🔍 How to Verify the Distribution Encryption
 
 **Local Storage Layer (`./vault_downloads`)**
+
 Check your project's directory for a `./vault_downloads` directory. You will find a `.vault` file. Even though this file exists on your hard drive, it remains fully encrypted.
 
-4. Decryption (Unlocking the Asset)
+### 5. Decryption (Unlocking the Asset)
 
 Now that you have the encrypted `.vault` file, use your licence key to decrypt it. This process is done entirely on the client; your licence key is never sent to the server during this phase.
 
@@ -136,6 +139,7 @@ Upon running the command, you should see your now decrypted file in the `vault_d
 🔍 How to Verify Authenticated Decryption
 
 **Wrong Licence Key**
+
 You can attempt to decrypt with a wrong key by manually overriding the licence key in your config using the `--override-key` flag:
 
 ```bash
@@ -145,6 +149,7 @@ docker compose exec app node ace vault-zip:decrypt ./vault_downloads/your_file.p
 You will be prompted to input a licence key.
 
 **File Tampering**
+
 You can also manually modify even a single byte of the `.vault` file (try it in a [hex editor](https://hexed.it/)).
 Note: When testing with a hex editor, modify a byte toward the end of the file. This ensures you are tampering with the encrypted payload rather than the metadata header, allowing you to see the AES-GCM authentication failure in action.
 
