@@ -85,7 +85,9 @@ docker compose exec app node ace vault-zip:upload --email=your_email --title="My
 🔍 How to Verify the File Encryption
 
 **Storage Layer (MinIO)**
-Visit the MinIO Console at http://localhost:9001 (login with your .env credentials — check the `docker-compose.yml` file). Locate the file in the vault-zip bucket. Any manual download will result in unreadable binary gibberish, confirming the AES-256-GCM encryption is active.
+- Visit the MinIO Console at http://localhost:9001.
+- In your `docker-compose.yml`, look under `services` -> `app` -> `environment`. Use `AWS_ACCESS_KEY_ID` as the username and `AWS_SECRET_ACCESS_KEY` as the password.
+- Locate your file in the vault-zip bucket. Any manual download will result in unreadable binary gibberish, confirming that AES-256-GCM encryption is active and the raw data is protected at rest.
 
 **Database Layer (PostgreSQL)**
 To verify that the cryptographic fingerprints (IV, Auth Tag, and Encrypted Key) are properly stored:
