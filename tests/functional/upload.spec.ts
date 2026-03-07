@@ -145,12 +145,16 @@ test.group('Upload', (group) => {
       'file_path_not_provided',
       'file_not_found',
       'file_type_not_supported',
+      'file_type_spoofing',
       'file_size_exceeds_max_size',
     ] as const)
-    .run(async ({}, condition) => {
+    .run(async ({ assert }, condition) => {
       const email = 'test@example.com'
 
-      await User.create({ email, licence_key: cuid() })
+      const user = await User.create({ email, licence_key: cuid() })
+
+      await user.load('fileUploads')
+      assert.isEmpty(user.fileUploads)
 
       const title = 'My Important File'
 
@@ -163,12 +167,16 @@ test.group('Upload', (group) => {
       zipFile.addFile(
         'file.txt',
         condition === 'file_size_exceeds_max_size'
-          ? randomBytes(1024 * 1024 * (maxFileSizeMB + 10))
+          ? randomBytes(1024 * 1024 * (maxFileSizeMB + 5))
           : Buffer.alloc(1024, '0')
       )
 
-      if (condition !== 'file_not_found') {
+      if (condition !== 'file_not_found' && condition !== 'file_type_spoofing') {
         await zipFile.writeZipPromise(testFilePath)
+      }
+
+      if (condition === 'file_type_spoofing') {
+        fs.writeFileSync(testFilePath, 'Hello World')
       }
 
       const command = await ace.create(Upload, [
@@ -212,6 +220,10 @@ test.group('Upload', (group) => {
           message = `Invalid file type. Only ${allowedExtensions.join(', ')} are allowed.`
           break
 
+        case 'file_type_spoofing':
+          message = `The file content does not match its extension name.`
+          break
+
         case 'file_size_exceeds_max_size':
           message = `File size must not exceed ${maxFileSizeMB}mb.`
           break
@@ -229,6 +241,22 @@ test.group('Upload', (group) => {
       }
 
       command.assertLog(`[ red(error) ] ${message}`, 'stderr')
+
+      await user.load('fileUploads')
+
+      if (condition === 'file_type_spoofing') {
+        assert.lengthOf(user.fileUploads, 1)
+
+        // Assert that the initialised fileUpload remains pending, and no auth_tag or location is persisted (the file was not uploaded to remote storage)
+        assert.equal(user.fileUploads[0].status, FileUploadStatuses.Pending)
+
+        assert.exists(user.fileUploads[0].file_data)
+
+        assert.notExists(user.fileUploads[0].file_data.auth_tag)
+        assert.notExists(user.fileUploads[0].file_data.location)
+      } else {
+        assert.isEmpty(user.fileUploads)
+      }
     })
     .tags(['upload'])
     .timeout(30000)

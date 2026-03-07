@@ -7,7 +7,7 @@ export const allowedExtensions = ['zip', 'doc', 'docx', 'pdf']
 
 export const allowedPattern = new RegExp(`\\.(${allowedExtensions.join('|')})$`, 'i')
 
-export const maxFileSizeMB = app.inTest ? 50 : 500 // in "mb"
+export const maxFileSizeMB = app.inTest ? 150 : 500 // in "mb"
 
 export type FileMetadata = {
   keySalt: string

@@ -17,6 +17,8 @@ import {
 } from '../../helpers/file_upload_helper.js'
 import drive from '@adonisjs/drive/services/main'
 import { PassThrough } from 'node:stream'
+import { fileTypeFromStream } from 'file-type'
+import logger from '@adonisjs/core/services/logger'
 
 const stringRules = [rules.trim(), rules.escape()]
 
@@ -69,7 +71,7 @@ export default class FileUploadsController {
     const { user } = validationResult
 
     const fileUpload = await FileUpload.query()
-      .where({ id: params.id })
+      .where({ id: params.id, status: FileUploadStatuses.Completed })
       .whereHas('user', (userQuery) => {
         userQuery.select('id').where({ id: user.id })
       })
@@ -100,7 +102,7 @@ export default class FileUploadsController {
 
     // Handle streaming errors
     combinedStream.on('error', (error) => {
-      console.error('Stream Error:', error)
+      logger.error({ error, fileUploadId: fileUpload.id, userId: user.id }, 'Stream Error')
     })
     encryptedStream.on('error', (error) => {
       combinedStream.destroy(error)
@@ -113,7 +115,10 @@ export default class FileUploadsController {
     // Handle user download cancellation
     request.request.on('close', () => {
       if (!isFinished) {
-        console.log('Download cancelled by user or network error.')
+        logger.warn(
+          { fileUploadId: fileUpload.id, userId: user.id },
+          'Download cancelled by user or network error.'
+        )
       }
 
       if (!combinedStream.destroyed) {
@@ -169,6 +174,7 @@ export default class FileUploadsController {
         'title.maxLength': 'Title must not exceed 100 characters.',
         'email.required': 'Email is required.',
         'file_name.required': 'Original file name is required.',
+        // NB: The actual file signature will be checked during streaming to prevent spoofing
         'file_name.regex': `Invalid file type. Only ${allowedExtensions.join(', ')} are allowed.`,
         'file_size.required': 'File size is required',
         'file_size.range': `File size must not exceed ${maxFileSizeMB}mb.`,
@@ -271,6 +277,11 @@ export default class FileUploadsController {
           return
         }
 
+        // Set up a PassThrough "sniffer" to check the actual file signature, without consuming the data meant for the upload to S3
+        const sniffer = new PassThrough()
+
+        part.pipe(sniffer)
+
         const cipher = crypto.createCipheriv('aes-256-gcm', rawFileKey, iv)
 
         part.pause()
@@ -301,11 +312,37 @@ export default class FileUploadsController {
 
         // For debugging
         // upload.on('httpUploadProgress', (progress) => {
-        //   console.log('progress...', progress)
+        //   logger.debug(progress, 'progress...')
         // })
 
-        await upload.done()
+        // CRITICAL Run the file signature check and the upload in parallel.
+        // Do not await the file signature check before starting the upload,
+        // This ensures that data is ALWAYS moving to S3, which prevents deadlock (backpressure) for large files.
+        const checkFileType = async () => {
+          const fileType = await fileTypeFromStream(sniffer)
 
+          // CRITICAL: Once the sniffer has the file header, it stops consuming data. We must resume it (to drain the sniffer) so that the main S3 stream does not back up
+          sniffer.resume()
+
+          if (!fileType || !allowedExtensions.includes(fileType.ext)) {
+            const errorMessage = 'Mime-type spoofing detected!'
+            part.emit('error', new Error(errorMessage))
+
+            logger.warn({ fileType, errorMessage, fileUploadId: fileUpload.id })
+
+            // Force `Promise.all` to reject immediately
+            throw new Error(errorMessage)
+          }
+        }
+
+        try {
+          await Promise.all([checkFileType(), upload.done()])
+        } catch (error) {
+          // Exit the callback safely
+          return
+        }
+
+        // If we reach this point, the file is valid and fully uploaded to S3
         const authTag = cipher.getAuthTag()
 
         fileUpload.merge({
@@ -317,7 +354,7 @@ export default class FileUploadsController {
         })
 
         /**
-         * We adopt the approach above (bypassing Adonis Drive and talking directly to AWS) to avoid "MissingContentLength" error for the stream
+         * We adopt the approach of bypassing Adonis Drive and talking directly to AWS to avoid "MissingContentLength" error for the stream. We don't do this:
          */
         // await drive.use('s3').putStream(`${Date.now()}_${part.file.clientName}_${cuid()}`, part, {
         //   contentLength: part.file.size,
@@ -336,7 +373,7 @@ export default class FileUploadsController {
 
     const errors = file.errors.map((error) => {
       const messages = {
-        extname: `${file.clientName} is not a zip`,
+        extname: `The file content does not match its extension name.`,
         size: `${file.clientName} is too large. `,
         fatal: `The remote storage rejected the file: ${error.message}`,
       }
