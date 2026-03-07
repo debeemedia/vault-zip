@@ -71,7 +71,7 @@ export default class FileUploadsController {
     const { user } = validationResult
 
     const fileUpload = await FileUpload.query()
-      .where({ id: params.id })
+      .where({ id: params.id, status: FileUploadStatuses.Completed })
       .whereHas('user', (userQuery) => {
         userQuery.select('id').where({ id: user.id })
       })
