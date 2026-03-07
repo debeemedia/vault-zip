@@ -102,7 +102,7 @@ export default class FileUploadsController {
 
     // Handle streaming errors
     combinedStream.on('error', (error) => {
-      console.error('Stream Error:', error)
+      logger.error({ error, fileUploadId: fileUpload.id, userId: user.id }, 'Stream Error')
     })
     encryptedStream.on('error', (error) => {
       combinedStream.destroy(error)
@@ -115,7 +115,10 @@ export default class FileUploadsController {
     // Handle user download cancellation
     request.request.on('close', () => {
       if (!isFinished) {
-        console.log('Download cancelled by user or network error.')
+        logger.warn(
+          { fileUploadId: fileUpload.id, userId: user.id },
+          'Download cancelled by user or network error.'
+        )
       }
 
       if (!combinedStream.destroyed) {
