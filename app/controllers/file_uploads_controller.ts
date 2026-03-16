@@ -1,6 +1,6 @@
 import env from '#start/env'
 import { cuid } from '@adonisjs/core/helpers'
-import { type HttpContext } from '@adonisjs/core/http'
+import type { HttpContext } from '@adonisjs/core/http'
 import { rules, schema } from '@adonisjs/validator'
 import { S3Client } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
