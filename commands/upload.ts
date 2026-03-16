@@ -52,9 +52,9 @@ export default class Upload extends BaseCommand {
     const formData = new FormData()
     formData.append('title', this.title)
 
-    const baseUrl = `http://${process.env.HOST}:${process.env.PORT}/file_uploads`
+    const baseUrl = `http://${process.env.HOST}:${process.env.PORT}`
 
-    const preFlightResponse = await fetch(baseUrl, {
+    const preFlightResponse = await fetch(`${baseUrl}/file_uploads`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -69,9 +69,14 @@ export default class Upload extends BaseCommand {
 
     const preFlightData = (await preFlightResponse.json()) as {
       message?: string
-      fileUploadId?: string
       error?: string
       errors?: string[]
+      links?: {
+        upload: {
+          method: string
+          href: string
+        }
+      }
     }
 
     if (!preFlightResponse.ok) {
@@ -80,7 +85,7 @@ export default class Upload extends BaseCommand {
       return (this.exitCode = 1)
     }
 
-    if (!preFlightData.fileUploadId) {
+    if (!preFlightData.links?.upload) {
       return
     }
 
@@ -91,8 +96,8 @@ export default class Upload extends BaseCommand {
 
     uploadData.append('file', fileBlob, fileName)
 
-    const response = await fetch(`${baseUrl}/${preFlightData.fileUploadId}`, {
-      method: 'POST',
+    const response = await fetch(`${baseUrl}${preFlightData.links.upload.href}`, {
+      method: preFlightData.links.upload.method,
       body: uploadData,
       headers: {
         email: this.email,

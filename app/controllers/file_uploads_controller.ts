@@ -1,6 +1,6 @@
 import env from '#start/env'
 import { cuid } from '@adonisjs/core/helpers'
-import type { HttpContext } from '@adonisjs/core/http'
+import { type HttpContext } from '@adonisjs/core/http'
 import { rules, schema } from '@adonisjs/validator'
 import { S3Client } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
@@ -19,6 +19,7 @@ import drive from '@adonisjs/drive/services/main'
 import { PassThrough } from 'node:stream'
 import { fileTypeFromStream } from 'file-type'
 import logger from '@adonisjs/core/services/logger'
+import router from '@adonisjs/core/services/router'
 
 const stringRules = [rules.trim(), rules.escape()]
 
@@ -50,6 +51,12 @@ export default class FileUploadsController {
         title: upload.title,
         original_file_name: upload.file_data.original_file_name,
         file_size: `${(upload.file_data.file_size / (1024 * 1024)).toFixed(2)} MB`,
+        links: {
+          download: {
+            method: 'GET',
+            href: router.makeUrl('file_uploads.show', [upload.id]),
+          },
+        },
       })) ?? []
 
     return response.ok({ data: fileUploads })
@@ -215,7 +222,15 @@ export default class FileUploadsController {
       },
     })
 
-    return response.created({ message: 'File upload initialised.', fileUploadId: fileUpload.id })
+    return response.created({
+      message: 'File upload initialised.',
+      links: {
+        upload: {
+          method: 'POST',
+          href: router.makeUrl('file_uploads.upload', [fileUpload.id]),
+        },
+      },
+    })
   }
 
   /**
