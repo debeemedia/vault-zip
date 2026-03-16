@@ -22,7 +22,9 @@ router
   .only(['store' /* Route to initialise the file upload */, 'index', 'show'])
 
 // Route to upload the file
-router.post('file_uploads/:file_upload_id', [
-  () => import('#controllers/file_uploads_controller'),
-  'upload',
-])
+router
+  .post('file_uploads/:file_upload_id', [
+    () => import('#controllers/file_uploads_controller'),
+    'upload',
+  ])
+  .as('file_uploads.upload')

@@ -39,19 +39,24 @@ export default class Download extends BaseCommand {
 
     this.logger.info('Getting your files...')
 
-    const fileUploadsResponse = await fetch(
-      `http://${process.env.HOST}:${process.env.PORT}/file_uploads`,
-      {
-        method: 'GET',
-        headers: {
-          email: this.email,
-          licence_key: licenceKey,
-        },
-      }
-    )
+    const baseUrl = `http://${process.env.HOST}:${process.env.PORT}`
+
+    const fileUploadsResponse = await fetch(`${baseUrl}/file_uploads`, {
+      method: 'GET',
+      headers: {
+        email: this.email,
+        licence_key: licenceKey,
+      },
+    })
 
     const data = (await fileUploadsResponse.json()) as {
-      data?: { id: string; title: string; original_file_name: string; file_size: string }[]
+      data?: {
+        id: string
+        title: string
+        original_file_name: string
+        file_size: string
+        links?: { download: { method: string; href: string } }
+      }[]
       error?: string
       errors?: string[]
     }
@@ -95,10 +100,16 @@ export default class Download extends BaseCommand {
       }))
     )
 
+    const correspondingFileUpload = data.data.find((d) => d.id === fileUploadId)
+
+    if (!correspondingFileUpload?.links?.download) {
+      return
+    }
+
     const fileUploadResponse = await fetch(
-      `http://${process.env.HOST}:${process.env.PORT}/file_uploads/${fileUploadId}`,
+      `${baseUrl}${correspondingFileUpload.links.download.href}`,
       {
-        method: 'GET',
+        method: correspondingFileUpload.links.download.method,
         headers: {
           email: this.email,
           licence_key: licenceKey,
