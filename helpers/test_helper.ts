@@ -1,6 +1,5 @@
 import FileUpload, { FileUploadStatuses } from '#models/file_upload'
 import AdmZip from 'adm-zip'
-import encryption from '@adonisjs/core/services/encryption'
 import crypto from 'crypto'
 import ConfigService from '#services/config_service'
 import { Readable } from 'stream'
@@ -11,6 +10,8 @@ import { PassThrough } from 'node:stream'
 import User from '#models/user'
 import drive from '@adonisjs/drive/services/main'
 import { generateMetadataBuffer } from './file_upload_helper.js'
+import EncryptionKeyVersion from '#models/encryption_key_version'
+import EncryptionService from '#services/encryption_service'
 
 export const targetUserFileTitlePrefix = 'Target User'
 export const anotherUserFileTitlePrefix = 'Another User'
@@ -42,6 +43,15 @@ export async function uploadFiles({
 
   const originalFileBuffers: Buffer[] = []
   const encryptedFileOutputPaths: string[] = []
+
+  // On creation of file upload, use the active key version for encryption
+  const activeVersion = await EncryptionKeyVersion.query()
+    // Ensure to select the `version`, for the model hooks
+    .select(['id', 'version'])
+    .where('is_active', true)
+    .firstOrFail()
+
+  const encryption = EncryptionService.getEncryption(activeVersion.version)
 
   for (let i = 0; i < 2; i++) {
     const zipFile = new AdmZip()
@@ -80,6 +90,7 @@ export async function uploadFiles({
     assert.isTrue(await disk.exists(fileNames[i]))
 
     const fileUpload = await FileUpload.create({
+      encryption_key_version_id: activeVersion.id,
       title: titles[i],
       status: FileUploadStatuses.Completed,
       user_id: user.id,

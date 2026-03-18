@@ -6,7 +6,6 @@ import { S3Client } from '@aws-sdk/client-s3'
 import { Upload } from '@aws-sdk/lib-storage'
 import FileUpload, { FileUploadStatuses } from '#models/file_upload'
 import User from '#models/user'
-import encryption from '@adonisjs/core/services/encryption'
 import crypto from 'node:crypto'
 import vine, { SimpleMessagesProvider } from '@vinejs/vine'
 import {
@@ -20,6 +19,8 @@ import { PassThrough } from 'node:stream'
 import { fileTypeFromStream } from 'file-type'
 import logger from '@adonisjs/core/services/logger'
 import router from '@adonisjs/core/services/router'
+import EncryptionKeyVersion from '#models/encryption_key_version'
+import EncryptionService from '#services/encryption_service'
 
 const stringRules = [rules.trim(), rules.escape()]
 
@@ -33,6 +34,12 @@ export default class FileUploadsController {
     const validationResult = await validateDownloadRequest(request)
 
     if (typeof validationResult === 'string') {
+      if (validationResult === User.DECRYPTION_ERROR_MESSAGE) {
+        return response.internalServerError({
+          error: 'There is a technical issue verifying your licence key. Please contact support.',
+        })
+      }
+
       return response.unprocessableEntity({ error: validationResult })
     }
 
@@ -88,7 +95,7 @@ export default class FileUploadsController {
 
     const encryptedStream = await drive.use('s3').getStream(location!)
 
-    const rawFileKey = this.#decryptFileKey(fileUpload)
+    const rawFileKey = await this.#decryptFileKey(fileUpload)
 
     /**
      * Generate a header metadata buffer to be bundled along with the encrypted file to the client
@@ -201,6 +208,18 @@ export default class FileUploadsController {
 
     const rawFileKey = crypto.randomBytes(32)
 
+    /**
+     * todo: Consider moving the encryption and decryption of the file key to model hooks, as is done for user licence key.
+     */
+
+    // On creation, use the active key version for encryption
+    const activeVersion = await EncryptionKeyVersion.query()
+      .select(['id', 'version'])
+      .where('is_active', true)
+      .firstOrFail()
+
+    const encryption = EncryptionService.getEncryption(activeVersion.version)
+
     const encryptedFileKey = encryption.encrypt(
       rawFileKey.toString('base64'),
       undefined,
@@ -210,6 +229,7 @@ export default class FileUploadsController {
     const iv = crypto.randomBytes(12)
 
     const fileUpload = await FileUpload.create({
+      encryption_key_version_id: activeVersion.id,
       title,
       user_id: user.id,
       status: FileUploadStatuses.Pending,
@@ -274,7 +294,10 @@ export default class FileUploadsController {
 
     const iv = Buffer.from(fileUpload.file_data.iv, 'base64')
 
-    const rawFileKey = this.#decryptFileKey(fileUpload)
+    /**
+     * todo: Consider moving the encryption and decryption of the file key to model hooks, as is done for user licence key.
+     */
+    const rawFileKey = await this.#decryptFileKey(fileUpload)
 
     request.multipart.onFile(
       'file',
@@ -411,13 +434,25 @@ export default class FileUploadsController {
 
   static #ENCRYPTION_PURPOSE = 'File Upload'
 
-  #decryptFileKey(fileUpload: FileUpload) {
+  async #decryptFileKey(fileUpload: FileUpload) {
+    // For decryption, use the key version that was used during encryption
+    const encryption = await FileUpload.getEncryption(fileUpload)
+
     const decryptedBase64FileKey = encryption.decrypt<string>(
       fileUpload.file_data.encrypted_file_key,
       FileUploadsController.#ENCRYPTION_PURPOSE
     )
 
     if (!decryptedBase64FileKey) {
+      await fileUpload.load('encryptionKeyVersion', (encryptionKeyVersionQuery) => {
+        encryptionKeyVersionQuery.select(['id', 'version'])
+      })
+
+      logger.error(
+        { fileUploadId: fileUpload.id, keyVersion: fileUpload.encryptionKeyVersion.version },
+        `[Decryption Failure] 'Unable to decrypt file key.`
+      )
+
       throw new Error('Unable to decrypt file key')
     }
 
@@ -456,11 +491,16 @@ async function validateDownloadRequest(request: HttpContext['request']) {
   })
 
   const user = await User.query()
-    .select(['id', 'licence_key'])
+    // IMPORTANT: Always select `encryption_key_version_id` when selecting `licence_key` so that the "afterFind" decryption hook can run properly.
+    .select(['id', 'licence_key', 'encryption_key_version_id'])
     .where({ email: validatedEmail })
     .first()
 
-  if (!user || user.licence_key !== validatedLicenceKey) {
+  if (user?.licence_key === User.DECRYPTION_ERROR_MESSAGE) {
+    return user.licence_key
+  }
+
+  if (user?.licence_key !== validatedLicenceKey) {
     return 'Provide your email with the corresponding licence key.'
   }
 
