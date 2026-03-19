@@ -30,6 +30,7 @@ export default class RotateActiveKeyVersion extends BaseCommand {
 
     if (!process.env[envKey]) {
       this.logger.error(`Environment variable "${envKey}" is missing!`)
+
       return (this.exitCode = 1)
     }
 
@@ -42,7 +43,7 @@ export default class RotateActiveKeyVersion extends BaseCommand {
     } else {
       this.logger.info('Operation cancelled.')
 
-      return
+      return (this.exitCode = 0)
     }
 
     try {
