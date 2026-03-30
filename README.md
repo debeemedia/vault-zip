@@ -155,6 +155,43 @@ Note: When testing with a hex editor, modify a byte toward the end of the file. 
 
 The command will fail and any corrupted output will be automatically deleted to protect your workspace.
 
+## 🔑 Encryption Key Lifecycle & Rotation
+
+Vault-Zip uses a Versioned Encryption System to ensure data remains accessible even as security requirements evolve. Instead of a single static key, the system manages a relationship between database records and environment-level secrets.
+
+### Key Features
+
+- Key Versioning: Every encrypted file and user licence key is tagged with an `encryption_key_version_id`, allowing the system to pick the correct decryption key automatically.
+
+- Zero-Downtime Rotation: Rotate to a new `APP_KEY` without immediately re-encrypting every file in your storage.
+
+- Environment Auditing: Built-in CLI tools to verify that required keys exist in your `.env` before attempting operations.
+
+### CLI Commands
+
+1. Audit Key Versions:
+   List all registered versions and check if they are active and if their corresponding environment variables are present.
+
+```bash
+docker compose exec app node ace vault-zip:list-key-versions
+```
+
+2. Rotate Active Key:
+   Safely transition the system to a new encryption key. This command performs pre-flight checks to ensure the new key is available in the environment before deactivating the old one.
+
+```bash
+docker compose exec app node ace vault-zip:rotate-active-key-version --version=2
+```
+
+If the provided version already exists in the database, it's `is_active` status is set to true, and the previous active key is deactivated. Only one key is active at a time for new encryptions.
+
+[!IMPORTANT] Key Syncing Requirement:
+
+When introducing a new key version (e.g., `APP_KEY_V2`) in your environment (`docker-compose.yml`), you must also update the base `APP_KEY` variable to match that same value.
+
+Why?
+The core framework and internal encryption providers use the `APP_KEY` variable by default for general purpose encryption. To ensure the system-wide encryption remains in sync with your latest rotated version, both variables must point to the same secret.
+
 ## 🧪 Testing & Reliability
 
 The suite provides 100% command coverage, ensuring the system is resilient against malformed data and malicious tampering.
@@ -166,8 +203,9 @@ docker compose run --rm tester
 ```
 
 - Comprehensive Command Coverage: Exhaustive integration tests for `register`, `upload`, `list`, `download`, and `decrypt`. Every command tested against database and cloud (S3/MinIO) storage drivers.
+  Exhaustive tests are also availabe for the `list-key-versions` and `rotate-active-key-version` commands.
 
-- Strict Validation: Covers all failure modes including missing/duplicate emails, title constraints, and file size/type violations.
+- Strict Validation: Covers all failure modes including missing/duplicate emails, title constraints, file size/type violations, and missing environment variables for the key versioning/rotation tests.
 
 - Large File Support: Verified handling of multi-megabyte streams near the maximum size limit.
 
