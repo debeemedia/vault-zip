@@ -7,6 +7,7 @@ import User from '#models/user'
 import app from '@adonisjs/core/services/app'
 import { relative } from 'path'
 import ConfigService from '#services/config_service'
+import EncryptionKeyVersion from '#models/encryption_key_version'
 
 test.group('Register', (group) => {
   group.each.setup(async () => {
@@ -58,6 +59,21 @@ test.group('Register', (group) => {
       )
 
       command.assertLog(`[ green(success) ] Registration successful.`, 'stdout')
+
+      const activeVersion = await EncryptionKeyVersion.query()
+        .where('is_active', true)
+        .firstOrFail()
+
+      // Assert the key version used for encrypting the licence key
+      assert.equal(user!.encryption_key_version_id, activeVersion.id)
+
+      await user!.load('encryptionKeyVersion')
+
+      assert.containSubset(user!.encryptionKeyVersion, {
+        id: activeVersion.id,
+        version: activeVersion.version,
+        is_active: activeVersion.is_active,
+      })
 
       // Assert that the licence key returned (decrypted) is different from what is stored (encrypted)
       const rawUser = await db.from('users').where({ email }).first()

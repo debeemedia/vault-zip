@@ -2,6 +2,8 @@ import { DateTime } from 'luxon'
 import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
 import User from './user.js'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import EncryptionKeyVersion from './encryption_key_version.js'
+import EncryptionService from '#services/encryption_service'
 
 type FileData = {
   original_file_name: string
@@ -28,6 +30,9 @@ export default class FileUpload extends BaseModel {
   @column()
   declare file_data: FileData
 
+  @column()
+  declare encryption_key_version_id: number
+
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
 
@@ -36,6 +41,18 @@ export default class FileUpload extends BaseModel {
 
   @belongsTo(() => User, { foreignKey: 'user_id' })
   declare user: BelongsTo<typeof User>
+
+  @belongsTo(() => EncryptionKeyVersion, { foreignKey: 'encryption_key_version_id' })
+  declare encryptionKeyVersion: BelongsTo<typeof EncryptionKeyVersion>
+
+  public static async getEncryption(file_upload: FileUpload) {
+    const version = await EncryptionKeyVersion.query()
+      .select(['id', 'version'])
+      .where('id', file_upload.encryption_key_version_id)
+      .firstOrFail()
+
+    return EncryptionService.getEncryption(version.version)
+  }
 }
 
 export enum FileUploadStatuses {

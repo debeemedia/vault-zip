@@ -54,8 +54,15 @@ test.group('Download', (group) => {
 
       assert.lengthOf(users, 2)
 
+      users.map(async (u) => {
+        assert.exists(u.encryption_key_version_id)
+      })
+
       const user = users.find((u) => u.email === email)
       assert.exists(user)
+
+      // Refresh to trigger the afterFind hook and get the decrypted licence key
+      await user!.refresh()
 
       await ConfigService.saveLicenceKey(isLicenceKeyNotSavedLocally ? '' : user!.licence_key)
 

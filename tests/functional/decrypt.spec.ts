@@ -36,7 +36,11 @@ test.group('Decrypt', (group) => {
         licence_key: cuid(),
       })
 
-      await ConfigService.saveLicenceKey(isLicenceKeyNotSavedLocally ? '' : user!.licence_key)
+      // Refresh to trigger the afterFind hook and get the decrypted licence key.
+      // Very important because apart from saving the decrypted key to the config, the `deriveAESKeyFromLicenceKey` function needs to run with the decrypted key.
+      await user.refresh()
+
+      await ConfigService.saveLicenceKey(isLicenceKeyNotSavedLocally ? '' : user.licence_key)
 
       // Upload some files for the user and download encrypted files locally
       const uploadResult = await uploadFiles({ assert, user, saveLocally: true })
