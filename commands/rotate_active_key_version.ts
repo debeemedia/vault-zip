@@ -22,7 +22,7 @@ export default class RotateActiveKeyVersion extends BaseCommand {
     }
 
     if (!/^[1-9]\d*$/.test(this.version)) {
-      this.logger.error('Version must be a positive whole number greather than zero.') // For now
+      this.logger.error('Version must be a positive whole number greater than zero.') // For now
       return (this.exitCode = 1)
     }
 
@@ -71,7 +71,7 @@ export default class RotateActiveKeyVersion extends BaseCommand {
         await trx.rawQuery(query, { version: this.version })
       })
 
-      this.logger.success('Key version updated successfully')
+      this.logger.success('Key version updated successfully.')
     } catch (error) {
       this.logger.error(`Rotation failed: ${error.message}`)
       this.exitCode = 1
