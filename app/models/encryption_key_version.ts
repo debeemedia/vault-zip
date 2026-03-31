@@ -14,6 +14,9 @@ export default class EncryptionKeyVersion extends BaseModel {
   @column()
   declare is_active: boolean
 
+  @column()
+  declare hash: string
+
   @column.dateTime({ autoCreate: true })
   declare created_at: DateTime
 

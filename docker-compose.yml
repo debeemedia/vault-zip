@@ -56,7 +56,9 @@ services:
       - PORT=3333
       - HOST=0.0.0.0
       - LOG_LEVEL=info
-      # IMPORTANT: `APP_KEY` must always be same as the highest version in `APP_KEY_V{n}
+      # IMPORTANT: `APP_KEY` must mirror the secret of the currently ACTIVE
+      # version in the `encryption_key_versions` table.
+      # Use `node ace vault-zip:list-key-versions` to confirm the active version.
       - APP_KEY=anystringanystringanystring
       - APP_KEY_V1=anystringanystringanystring
       - NODE_ENV=development
@@ -91,7 +93,9 @@ services:
       - TZ=UTC
       - HOST=0.0.0.0
       - LOG_LEVEL=info
-      # IMPORTANT: `APP_KEY` must always be same as the highest version in `APP_KEY_V{n}
+      # IMPORTANT: `APP_KEY` must mirror the secret of the currently ACTIVE
+      # version in the `encryption_key_versions` table.
+      # Use `node ace vault-zip:list-key-versions` to confirm the active version.
       - APP_KEY=anystringanystringanystring
       - APP_KEY_V1=anystringanystringanystring
       - NODE_ENV=test

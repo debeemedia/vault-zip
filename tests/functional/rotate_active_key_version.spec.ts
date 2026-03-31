@@ -4,6 +4,7 @@ import ace from '@adonisjs/core/services/ace'
 import EncryptionKeyVersion from '#models/encryption_key_version'
 import env from '#start/env'
 import RotateActiveKeyVersion from '../../commands/rotate_active_key_version.js'
+import { hashKeySecret } from '../../helpers/command_helper.js'
 
 test.group('Rotate Active Key Version', (group) => {
   const existingAppKey = process.env['APP_KEY']
@@ -43,15 +44,31 @@ test.group('Rotate Active Key Version', (group) => {
       'version_not_in_local_env',
       'operation_cancelled',
       'version_already_exists',
+      'version_exists_but_secret_changed',
+      'confirmation_version_mismatch',
     ] as const)
     .run(async ({ assert }, condition) => {
-      if (condition === 'version_already_exists') {
-        await EncryptionKeyVersion.create({ version: String(newVersion), is_active: false })
+      const newKeyValue = 'e1c4G0dLMXXy-LTRSiAyokG-vlngl5WL'
+
+      if (
+        condition === 'version_already_exists' ||
+        condition === 'version_exists_but_secret_changed'
+      ) {
+        await EncryptionKeyVersion.create({
+          version: String(newVersion),
+          is_active: false,
+          hash: hashKeySecret(
+            condition === 'version_exists_but_secret_changed' ? 'secret' : newKeyValue
+          ),
+        })
       }
 
       const keyVersions = await EncryptionKeyVersion.query().orderBy('created_at', 'asc')
 
-      if (condition === 'version_already_exists') {
+      if (
+        condition === 'version_already_exists' ||
+        condition === 'version_exists_but_secret_changed'
+      ) {
         assert.lengthOf(keyVersions, 2)
         assert.isTrue(keyVersions[0].is_active)
         assert.isFalse(keyVersions[1].is_active)
@@ -71,8 +88,6 @@ test.group('Rotate Active Key Version', (group) => {
       assert.equal(appKey, appKeyV1)
 
       if (condition !== 'version_not_in_local_env') {
-        const newKeyValue = 'e1c4G0dLMXXy-LTRSiAyokG-vlngl5WL'
-
         process.env[`APP_KEY_V${newVersion}`] = newKeyValue
         process.env[`APP_KEY`] = newKeyValue
       }
@@ -87,13 +102,26 @@ test.group('Rotate Active Key Version', (group) => {
       if (
         condition === 'main_assertion' ||
         condition === 'operation_cancelled' ||
-        condition === 'version_already_exists'
+        condition === 'version_already_exists' ||
+        condition === 'confirmation_version_mismatch'
       ) {
         command.prompt
           .trap(
             'Are you sure you want to activate this key version? The current active version will be deactivated.'
           )
+          .replyWith(true)
+
+        command.prompt
+          .trap(
+            'WARNING: Once this command finishes, ALL subsequent CLI commands (including this one) will CRASH until you update your APP_KEY in the env. Proceed?'
+          )
           .replyWith(condition !== 'operation_cancelled')
+
+        if (condition !== 'operation_cancelled') {
+          command.prompt
+            .trap(`Type the version number "${newVersion}" to confirm the rotation.`)
+            .replyWith(condition === 'confirmation_version_mismatch' ? '500' : newVersion)
+        }
       }
 
       await command.exec()
@@ -115,6 +143,15 @@ test.group('Rotate Active Key Version', (group) => {
           'stderr'
         )
       }
+      if (condition === 'version_exists_but_secret_changed') {
+        command.assertLog(
+          `[ red(error) ] Security Alert: The secret for APP_KEY_V${newVersion} does not match the original hash stored in the database. Version secrets cannot be changed once established.`,
+          'stderr'
+        )
+      }
+      if (condition === 'confirmation_version_mismatch') {
+        command.assertLog(`[ red(error) ] Version mismatch. Rotation aborted.`, 'stderr')
+      }
 
       if (
         condition === 'main_assertion' ||
@@ -131,9 +168,24 @@ test.group('Rotate Active Key Version', (group) => {
       }
 
       if (condition === 'main_assertion' || condition === 'version_already_exists') {
+        command.assertLog(
+          '[ yellow(warn) ] CRITICAL OPERATION: You are about to change the active encryption key.',
+          'stdout'
+        )
+
+        command.assertLog(`[ blue(info) ] New Active Version: V${newVersion}`, 'stdout')
+
+        command.assertLog(
+          `[ blue(info) ] Required APP_KEY: ${newKeyValue.substring(0, 4)}...${newKeyValue.substring(newKeyValue.length - 4)}`,
+          'stdout'
+        )
+
         command.assertLog('[ blue(info) ] Updating active key version...', 'stdout')
 
-        command.assertLog('[ green(success) ] Key version updated successfully.', 'stdout')
+        command.assertLog(
+          `[ green(success) ] Rotation successful in DB. Ensure your env is updated: set APP_KEY to match APP_KEY_V${newVersion} to prevent subsequent boot failure.`,
+          'stdout'
+        )
       }
 
       // If the provided version already exists, the command succeeds and the version is set to active, while the previously active version is deactivated.
@@ -141,7 +193,11 @@ test.group('Rotate Active Key Version', (group) => {
       const updatedKeyVersions = await EncryptionKeyVersion.query()
       assert.lengthOf(
         updatedKeyVersions,
-        condition === 'main_assertion' || condition === 'version_already_exists' ? 2 : 1
+        condition === 'main_assertion' ||
+          condition === 'version_already_exists' ||
+          condition === 'version_exists_but_secret_changed'
+          ? 2
+          : 1
       )
 
       if (condition !== 'main_assertion') {

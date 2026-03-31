@@ -3,6 +3,7 @@ import db from '@adonisjs/lucid/services/db'
 import ace from '@adonisjs/core/services/ace'
 import ListKeyVersions from '../../commands/list_key_versions.js'
 import EncryptionKeyVersion from '#models/encryption_key_version'
+import { hashKeySecret } from '../../helpers/command_helper.js'
 
 test.group('List Key Versions', (group) => {
   group.each.setup(async () => {
@@ -33,7 +34,11 @@ test.group('List Key Versions', (group) => {
         await keyVersions[0].delete()
       } else {
         // Let's create another inactive encryption key in the db, that is also missing in the env
-        await EncryptionKeyVersion.create({ version: '2', is_active: false })
+        await EncryptionKeyVersion.create({
+          version: '2',
+          is_active: false,
+          hash: hashKeySecret('secret'),
+        })
       }
 
       const updatedKeyVersions = await EncryptionKeyVersion.query()
