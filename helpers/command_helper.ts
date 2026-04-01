@@ -1,5 +1,6 @@
 import ConfigService from '#services/config_service'
 import { BaseCommand } from '@adonisjs/core/ace'
+import crypto from 'node:crypto'
 
 export async function resolveLicenceKey({
   overrideKey,
@@ -31,4 +32,8 @@ export async function resolveLicenceKey({
   }
 
   return licenceKey
+}
+
+export function hashKeySecret(secret: string) {
+  return crypto.createHash('sha256').update(secret).digest('hex')
 }

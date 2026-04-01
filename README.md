@@ -8,6 +8,8 @@ Key Security Features:
 
 - Layered Security: Every file has a unique Data Key, which is itself encrypted by a Master Key. Even a database leak won't expose your files without the Master Key.
 
+- Cryptographic "Door Guard" & Key Rotation: Features a fail-safe boot-time integrity check that synchronizes environment secrets with an active key versioning system. This architecture enables zero-downtime master key rotation and ensures the application refuses to boot if the environment's `APP_KEY` does not match the active database version, preventing configuration drift and decryption failures.
+
 - Handshake Architecture: Utilizes a custom CLI for a secure two-step upload process. The backend validates file metadata (like size limits, extensions etc.) during the handshake phase to mitigate "blind upload" attacks, ensuring only compliant streams reach the encryption pipeline.
 
 ## 🔐 The Multi-Level Encryption Strategy
@@ -169,15 +171,17 @@ Vault-Zip uses a Versioned Encryption System to ensure data remains accessible e
 
 ### CLI Commands
 
-1. Audit Key Versions:
-   List all registered versions and check if they are active and if their corresponding environment variables are present.
+#### 1. List Key Versions:
+
+List all registered versions and check if they are active and if their corresponding environment variables are present.
 
 ```bash
 docker compose exec app node ace vault-zip:list-key-versions
 ```
 
-2. Rotate Active Key:
-   Safely transition the system to a new encryption key. This command performs pre-flight checks to ensure the new key is available in the environment before deactivating the old one.
+#### 2. Rotate Active Key:
+
+Safely transition the system to a new encryption key. This command performs pre-flight checks to ensure the new key is available in the environment before deactivating the old one. In your `docker-compose.yml`, look under `services` -> `app` -> `environment`.
 
 ```bash
 docker compose exec app node ace vault-zip:rotate-active-key-version --version=2
@@ -187,10 +191,32 @@ If the provided version already exists in the database, it's `is_active` status 
 
 [!IMPORTANT] Key Syncing Requirement:
 
-When introducing a new key version (e.g., `APP_KEY_V2`) in your environment (`docker-compose.yml`), you must also update the base `APP_KEY` variable to match that same value.
+After running the command to rotate the key, ensure you update the `APP_KEY` to mirror the secret of the currently active version in the `encryption_key_versions` database table.
 
 Why?
 The core framework and internal encryption providers use the `APP_KEY` variable by default for general purpose encryption. To ensure the system-wide encryption remains in sync with your latest rotated version, both variables must point to the same secret.
+
+[!TIP]
+
+To generate a cryptographically secure key, run this command and copy the output from the terminal:
+
+```bash
+node ace generate:key --show
+```
+
+Sample Output: `HwQ8D8UKcK8c34sdcY3mXkO-pJ9yAnkR`
+
+## 🛡️ Data Integrity & The "Door Guard"
+
+To prevent "silent corruption" (encrypting data with an out-of-sync key), the system implements a strict Boot-Time Hash Validation:
+
+- Immutable Hashes: When a key version is first activated, a SHA-256 fingerprint of the secret is locked in the database.
+
+- Fail-Fast Protection: After application boot, the system hashes the current `APP_KEY` and compares it against the active database record.
+
+- Atomic Consistency: If the environment secret does not match the database "Source of Truth," the application will refuse to start, preventing accidental encryption with incorrect credentials.
+
+This system prioritizes data integrity over app functionality. Any mismatch in the master key used for encryption causes the app to crash after booting because, in this application, there is no other important feature that can be afforded runtime without resolving master key discrepancies.
 
 ## 🧪 Testing & Reliability
 

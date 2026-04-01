@@ -75,6 +75,8 @@ test.group('Register', (group) => {
         is_active: activeVersion.is_active,
       })
 
+      assert.exists(user!.encryptionKeyVersion.hash)
+
       // Assert that the licence key returned (decrypted) is different from what is stored (encrypted)
       const rawUser = await db.from('users').where({ email }).first()
 
