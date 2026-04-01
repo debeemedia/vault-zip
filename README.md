@@ -8,6 +8,8 @@ Key Security Features:
 
 - Layered Security: Every file has a unique Data Key, which is itself encrypted by a Master Key. Even a database leak won't expose your files without the Master Key.
 
+- Cryptographic "Door Guard" & Key Rotation: Features a fail-safe boot-time integrity check that synchronizes environment secrets with an active key versioning system. This architecture enables zero-downtime master key rotation and ensures the application refuses to boot if the environment's `APP_KEY` does not match the active database version, preventing configuration drift and decryption failures.
+
 - Handshake Architecture: Utilizes a custom CLI for a secure two-step upload process. The backend validates file metadata (like size limits, extensions etc.) during the handshake phase to mitigate "blind upload" attacks, ensuring only compliant streams reach the encryption pipeline.
 
 ## 🔐 The Multi-Level Encryption Strategy
@@ -169,15 +171,17 @@ Vault-Zip uses a Versioned Encryption System to ensure data remains accessible e
 
 ### CLI Commands
 
-1. Audit Key Versions:
-   List all registered versions and check if they are active and if their corresponding environment variables are present.
+#### 1. List Key Versions:
+
+List all registered versions and check if they are active and if their corresponding environment variables are present.
 
 ```bash
 docker compose exec app node ace vault-zip:list-key-versions
 ```
 
-2. Rotate Active Key:
-   Safely transition the system to a new encryption key. This command performs pre-flight checks to ensure the new key is available in the environment before deactivating the old one. In your `docker-compose.yml`, look under `services` -> `app` -> `environment`.
+#### 2. Rotate Active Key:
+
+Safely transition the system to a new encryption key. This command performs pre-flight checks to ensure the new key is available in the environment before deactivating the old one. In your `docker-compose.yml`, look under `services` -> `app` -> `environment`.
 
 ```bash
 docker compose exec app node ace vault-zip:rotate-active-key-version --version=2
