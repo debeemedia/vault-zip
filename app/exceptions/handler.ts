@@ -20,7 +20,7 @@ export default class HttpExceptionHandler extends ExceptionHandler {
 
       const messages = Array.isArray(rawMessages)
         ? rawMessages.map(({ message }: { message: string }) => message)
-        : [error?.message || 'Validation failed']
+        : [(typeof rawMessages === 'string' ? rawMessages : error?.message) || 'Validation failed']
 
       return ctx.response.unprocessableEntity({
         errors: messages,
